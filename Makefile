@@ -1,11 +1,11 @@
-CC=gcc
-CFLAGS=-O2
+CXX=g++
+CXXFLAGS=-O2
 LDFLAGS=-lm
 
 all: parsim
 
-parsim: parsim.c
-	$(CC) $(CFLAGS) -o parsim parsim.c $(LDFLAGS)
+parsim: parsim.cpp
+	$(CXX) $(CXXFLAGS) -o parsim parsim.cpp $(LDFLAGS)
 
 clean:
 	rm -f parsim
