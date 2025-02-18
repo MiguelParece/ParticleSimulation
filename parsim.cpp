@@ -4,6 +4,7 @@
 #include <vector>
 #include <random>
 #include <stdexcept>
+#include <string>
 
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
