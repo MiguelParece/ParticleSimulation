@@ -128,9 +128,10 @@ class ParticleSimulation
 {
 private:
     std::vector<Particle> particles;         // particle data
-    std::vector<long> particle_index;        // indice
-    std::vector<Cell> particle_cell_index;   // fazer o mapeamento particula -> quadrado
-    std::vector<CellBounds> cell_boundaries; // cell boundaries
+    std::vector<Particle*> cell_sorted;        // array de ponteiros para a data que servirá como middle man para o sort
+                                               // assim a actual data esta sempre no mesmo sitio. (mais eficiente ) sera worth tho ?
+    std::vector<CellBounds> cell_boundaries; // cell boundaries estes bounds sao o inicio e o fim (indices) do array cell_sorted assim se 
+                                             // fizermos cell_boundaries[0].start / .end sabemos quais particulas estao na cell 0 rapidamente 
 
     RandomGenerator rng;
     double side_length;
@@ -161,7 +162,7 @@ public:
 
     void simulate(long n_time_steps)
     {
-        for (long i = 0; i < n_time_steps; i++)
+        for (long i = 0; i < n_time_steps; i++)  //TODO main loop with the right steps
         {
           
         }
