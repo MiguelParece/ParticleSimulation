@@ -216,7 +216,7 @@ public:
                         int neighbour_cell_y = cells[i].y + dy;
 
                         if(neighbour_cell_x>=0 && neighbour_cell_y >=0 && neighbour_cell_x < grid_size && neighbour_cell_y < grid_size){
-                           
+                            neighbour_cell_index = neighbour_cell_y + neighbour_cell_y * grid_size
                             cellParticles[i][j]->calculateForceWithCell();
 
                         }else{
