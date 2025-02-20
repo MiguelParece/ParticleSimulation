@@ -215,17 +215,12 @@ public:
                         int neighbour_cell_x = cells[i].x + dx;
                         int neighbour_cell_y = cells[i].y + dy;
 
-                        if(neighbour_cell_x>=0 && neighbour_cell_y >=0 && neighbour_cell_x < grid_size && neighbour_cell_y < grid_size){
-                            neighbour_cell_index = neighbour_cell_y + neighbour_cell_y * grid_size
-                            cellParticles[i][j]->calculateForceWithCell();
-
-                        }else{
-                            //necessario loop back
-
-                        }
-                        
+                        //necessario loopback
+                        neighbour_cell_x = (neighbour_cell_x + grid_size) % grid_size; // calcula o mirror caso seja preciso
+                        neighbour_cell_y = (neighbour_cell_y + grid_size) % grid_size;
+                        int neighbour_cell_index = neighbour_cell_y + neighbour_cell_y * grid_size;
+                        cellParticles[i][j]->calculateForceWithCell(&cells[neighbour_cell_index]);
                     }
-                    
                 }
 
             }
