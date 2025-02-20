@@ -42,6 +42,8 @@ public:
     }
 };
 
+class Cell;
+
 class Particle
 {
 private:
@@ -53,67 +55,22 @@ private:
         vx += ax * DELTAT;
         vy += ay * DELTAT;
     }
+
 public:
     double x, y;   // Position
     double vx, vy; // Velocity
     double m;      // Mass
-    double fx, fy;  // Force
+    double fx, fy; // Force
     bool alive;    // has Collided
 
     Particle() : x(0), y(0), vx(0), vy(0), m(0), alive(true) {}
 
-    void calculateForceBetweenParticles(Particle *p2) {
-        double dx = p2->x - x;
-        double dy = p2->y - y;
-    
-        // Small constant to avoid division by zero issues
-        double distSquared = dx * dx + dy * dy;
-        double dist = std::sqrt(distSquared);
-        if (dist == 0) {
-            return; // Avoid self-force
-        }
-    
-        double forceMagnitude = (G * m * p2->m) / distSquared;
-    
-        // Normalize and apply force
-        double fx_add = forceMagnitude * (dx / dist);
-        double fy_add = forceMagnitude * (dy / dist);
-    
-        fx += fx_add;
-        fy += fy_add;
-        p2->fx -= fx_add;
-        p2->fy -= fy_add;
-    }
+    void calculateForceBetweenParticles(Particle *p2);
+    void calculateForceWithCell(const Cell *c);
+    void applyForce();
 
-    void calculateForceWithCell(const Cell *c)
+    double getDistance(Particle *p)
     {
-        double dx = c->x - x;
-        double dy = c->y - y;
-    
-        // Small constant to avoid division by zero issues
-        double distSquared = dx * dx + dy * dy;
-        double dist = std::sqrt(distSquared);
-        if (dist == 0) {
-            return; // Avoid self-force
-        }
-    
-        double forceMagnitude = (G * m * c->m) / distSquared;
-    
-        // Normalize and apply force
-        fx += forceMagnitude * (dx / dist);
-        fy += forceMagnitude * (dy / dist);
-    }
-
-
-    void applyForce()
-    {
-        double ax = fx / m;
-        double ay = fy / m;
-
-        updatePositionAndVelocity(ax, ay);
-    }
-
-    double getDistance(Particle* p) {
         return sqrt(pow((x - p->x), 2) + pow((y - p->y), 2));
     }
 };
@@ -121,30 +78,80 @@ public:
 class Cell
 {
 public:
-    double mx, my;          // Center of Mass
-    double m;               // Mass
-    int x, y;               // Cell position
+    double mx, my; // Center of Mass
+    double m;      // Mass
+    int x, y;      // Cell position
 
-    Cell(unsigned int id = 0) : mx(0), my(0), m(0) , x(0), y(0) {}
+    Cell(unsigned int id = 0) : mx(0), my(0), m(0), x(0), y(0) {}
 
-    void addParticle(Particle* p) {
-        m += p->m;
-        mx += p->m * p->x;
-        my += p->m * p->y;
-    }
-
-    void addParticle(Particle* p) {
-        if (m == 0) { 
+    void addParticle(Particle *p)
+    {
+        if (m == 0)
+        {
             mx = p->x;
             my = p->y;
-        } else {
+        }
+        else
+        {
             mx = (mx * m + p->m * p->x) / (m + p->m);
             my = (my * m + p->m * p->y) / (m + p->m);
         }
         m += p->m;
     }
-    
 };
+
+void Particle::calculateForceWithCell(const Cell *c)
+{
+    double dx = c->mx - x; // Changed from c->x to c->mx
+    double dy = c->my - y; // Changed from c->y to c->my
+
+    double distSquared = dx * dx + dy * dy;
+    double dist = std::sqrt(distSquared);
+    if (dist == 0)
+    {
+        return;
+    }
+
+    double forceMagnitude = (G * m * c->m) / distSquared;
+
+    fx += forceMagnitude * (dx / dist);
+    fy += forceMagnitude * (dy / dist);
+}
+
+void Particle::calculateForceBetweenParticles(Particle *p2)
+{
+    double dx = p2->x - x;
+    double dy = p2->y - y;
+
+    double distSquared = dx * dx + dy * dy;
+    double dist = std::sqrt(distSquared);
+    if (dist == 0)
+    {
+        return;
+    }
+
+    double forceMagnitude = (G * m * p2->m) / distSquared;
+
+    double fx_add = forceMagnitude * (dx / dist);
+    double fy_add = forceMagnitude * (dy / dist);
+
+    fx += fx_add;
+    fy += fy_add;
+    p2->fx -= fx_add;
+    p2->fy -= fy_add;
+}
+
+void Particle::applyForce()
+{
+    double ax = fx / m;
+    double ay = fy / m;
+
+    updatePositionAndVelocity(ax, ay);
+
+    // Reset forces for next iteration
+    fx = 0;
+    fy = 0;
+}
 
 class ParticleSimulation
 {
@@ -164,7 +171,7 @@ public:
         initializeSimulation();
     }
 
-    //TODO: tem que se chamar initializeParticles.
+    // TODO: tem que se chamar initializeParticles.
     void initializeSimulation()
     {
         auto rnd01 = [this]()
@@ -178,13 +185,13 @@ public:
             particles[i].vy = (rnd01() - 0.5) * side_length / grid_size / 5.0;
             particles[i].m = rnd01() * 0.01 * (grid_size * grid_size) /
                              particles.size() / G * EPSILON2;
-            
         }
     }
 
-    void updateCOM(){
-        cellParticles.assign(grid_size * grid_size, std::vector<Particle*>{});
-        cells.assign(grid_size * grid_size, Cell{});  
+    void updateCOM()
+    {
+        cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
+        cells.assign(grid_size * grid_size, Cell{});
         for (size_t i = 0; i < particles.size(); i++)
         {
             // Calculate cell index
@@ -200,51 +207,66 @@ public:
             cells[cell_index].y = cell_y;
         }
     }
-    
 
-    void updateForces(){
-        for(int i = 0 ; i < cellParticles.size();i++){ // percorrer todas as cells
-            for(int j = 0;j<cellParticles[i].size();i++){ // por cada por todas as particulas de cada cell
-                   for(int k = j+1; j<cellParticles[i].size()-1;k++){ // ver todas as outras particulas dentro da mesma cell
-                        cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
-                   }
+    void updateForces()
+    {
+        for (int i = 0; i < cellParticles.size(); i++)
+        { // percorrer todas as cells
+            for (int j = 0; j < cellParticles[i].size(); j++)
+            { // por cada por todas as particulas de cada cell
+                // TODO: talvez seja size+1
+                for (int k = j + 1; j < cellParticles[i].size(); k++)
+                { // ver todas as outras particulas dentro da mesma cell
+                    cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                }
                 // ver as cells que estao arround desta particula
 
-                for(int dx=-1;dx<1;dx++){
-                    for(int dy=-1; dy<1;dy++){
-                        if(cells[i].x==0 && cells[i].y==0){continue;} // salta a cell do meio 
+                for (int dx = -1; dx < 1; dx++)
+                {
+                    for (int dy = -1; dy < 1; dy++)
+                    {
+                        if (cells[i].x == 0 && cells[i].y == 0)
+                        {
+                            continue;
+                        } // salta a cell do meio
 
                         int neighbour_cell_x = cells[i].x + dx;
                         int neighbour_cell_y = cells[i].y + dy;
 
-                        //necessario loopback
+                        // necessario loopback
                         neighbour_cell_x = (neighbour_cell_x + grid_size) % grid_size; // calcula o mirror caso seja preciso
                         neighbour_cell_y = (neighbour_cell_y + grid_size) % grid_size;
                         int neighbour_cell_index = neighbour_cell_y + neighbour_cell_y * grid_size;
                         cellParticles[i][j]->calculateForceWithCell(&cells[neighbour_cell_index]);
                     }
                 }
-
             }
         }
     }
 
-    void updatePositionAndVelocity(){
+    void updatePositionAndVelocity()
+    {
         for (size_t i = 0; i < particles.size(); i++)
         {
             particles[i].applyForce();
         }
     }
 
-    void checkCollisions(){
-        for (int i = 0; i < cellParticles.size(); i++) {
-            std::unordered_set<Particle*> collisionSet;
-            for (int j = 0; j < cellParticles[i].size(); j++) {
-                for (int k = j + 1; k < cellParticles[i].size(); k++) {
+    void checkCollisions()
+    {
+        for (int i = 0; i < cellParticles.size(); i++)
+        {
+            std::unordered_set<Particle *> collisionSet;
+            for (int j = 0; j < cellParticles[i].size(); j++)
+            {
+                for (int k = j + 1; k < cellParticles[i].size(); k++)
+                {
                     // check distance between particles
-                    if (cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON2) {
+                    if (cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON2)
+                    {
                         // if particles not in set, increment collision counter
-                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][j]) == 0) {
+                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][j]) == 0)
+                        {
                             collisions++;
                         }
                         // if distance < epsilon, add particles to set
@@ -254,23 +276,24 @@ public:
                     // if particles not in set, increment collision counter
                 }
             }
-            for (const auto& elem : collisionSet) {
+            for (const auto &elem : collisionSet)
+            {
                 elem->alive = false;
             }
         }
     }
-    
+
     void simulate(long n_time_steps)
     {
-        for (long i = 0; i < n_time_steps; i++)  //TODO main loop with the right steps
+        for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {
-        //Calculate Cell center of mass
+            // Calculate Cell center of mass
             updateCOM();
-            //Calculate force for particles
+            // Calculate force for particles
             updateForces();
-            //Update position and velocity
+            // Update position and velocity
             updatePositionAndVelocity();
-            //Check collisons
+            // Check collisons
             checkCollisions();
         }
     }
