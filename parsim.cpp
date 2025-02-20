@@ -174,9 +174,6 @@ public:
         auto rnd01 = [this]()
         { return rng.uniform01(); };
 
-        cellParticles.resize(grid_size * grid_size);
-        cells.resize(grid_size * grid_size);
-
         for (size_t i = 0; i < particles.size(); i++)
         {
             particles[i].x = rnd01() * side_length;
@@ -185,15 +182,6 @@ public:
             particles[i].vy = (rnd01() - 0.5) * side_length / grid_size / 5.0;
             particles[i].m = rnd01() * 0.01 * (grid_size * grid_size) /
                              particles.size() / G * EPSILON2;
-
-            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
-
-            // Convert 2D cell index to 1D index
-            int cell_index = cell_y * grid_size + cell_x;
-
-            cellParticles[cell_index].push_back(&particles[i]);
-            cells[cell_index].addParticle(&particles[i]);
             
         }
     }
@@ -204,6 +192,21 @@ public:
         {
         //Calculate Cell center of mass
 
+
+            for (size_t i = 0; i < particles.size(); i++)
+            {
+                cellParticles.resize(grid_size * grid_size);
+                cells.resize(grid_size * grid_size);
+                // Calculate cell index
+                int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+                int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+                // Convert 2D cell index to 1D index
+                int cell_index = cell_y * grid_size + cell_x;
+
+                cellParticles[cell_index].push_back(&particles[i]);
+                cells[cell_index].addParticle(&particles[i]);
+            }
             //Calculate force for particles
             //Update position and velocity
             //Check collisons
