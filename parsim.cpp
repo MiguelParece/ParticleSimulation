@@ -154,6 +154,7 @@ private:
     RandomGenerator rng;
     double side_length;
     long grid_size;
+    long collisions;
 
 public:
     ParticleSimulation(long seed, double side, long ncside, long long n_part)
