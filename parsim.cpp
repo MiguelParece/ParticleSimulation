@@ -117,6 +117,23 @@ public:
     double m;               // Mass
 
     Cell(unsigned int id = 0) : unique_id(id), x(0), y(0), m(0) {}
+
+    void addParticle(Particle* p) {
+        m += p->m;
+        x += p->m * p->x;
+        y += p->m * p->y;
+    }
+
+    std::pair<double, double> getCOM(){
+        return {x/m, y/m};
+    }
+
+    void resetCOM(){
+        m = 0;
+        x = 0;
+        y = 0;
+    }
+    
 };
 
 struct CellBounds
@@ -127,12 +144,19 @@ struct CellBounds
 class ParticleSimulation
 {
 private:
-    std::vector<Particle> particles;         // particle data
-    std::vector<Particle*> cell_sorted;        // array de ponteiros para a data que servirá como middle man para o sort
-                                               // assim a actual data esta sempre no mesmo sitio. (mais eficiente ) sera worth tho ?
-    std::vector<CellBounds> cell_boundaries; // cell boundaries estes bounds sao o inicio e o fim (indices) do array cell_sorted assim se 
-                                             // fizermos cell_boundaries[0].start / .end sabemos quais particulas estao na cell 0 rapidamente 
+    // std::vector<Particle> particles;         // particle data
+    // std::vector<Particle*> cell_sorted;        // array de ponteiros para a data que servirá como middle man para o sort
+    //                                            // assim a actual data esta sempre no mesmo sitio. (mais eficiente ) sera worth tho ?
+    // std::vector<CellBounds> cell_boundaries; // cell boundaries estes bounds sao o inicio e o fim (indices) do array cell_sorted assim se 
+    //                                          // fizermos cell_boundaries[0].start / .end sabemos quais particulas estao na cell 0 rapidamente 
 
+    // RandomGenerator rng;
+    // double side_length;
+    // long grid_size;
+
+    std::vector<Particle> particles;
+    std::vector<std::vector<Particle *>> cellParticles;
+    std::vector<Cell> cells;
     RandomGenerator rng;
     double side_length;
     long grid_size;
@@ -141,13 +165,17 @@ public:
     ParticleSimulation(long seed, double side, long ncside, long long n_part)
         : particles(n_part), rng(seed), side_length(side), grid_size(ncside)
     {
-        initializeParticles();
+        initializeSimulation();
     }
 
-    void initializeParticles()
+    //TODO: tem que se chamar initializeParticles.
+    void initializeSimulation()
     {
         auto rnd01 = [this]()
         { return rng.uniform01(); };
+
+        cellParticles.resize(grid_size * grid_size);
+        cells.resize(grid_size * grid_size);
 
         for (size_t i = 0; i < particles.size(); i++)
         {
@@ -157,14 +185,28 @@ public:
             particles[i].vy = (rnd01() - 0.5) * side_length / grid_size / 5.0;
             particles[i].m = rnd01() * 0.01 * (grid_size * grid_size) /
                              particles.size() / G * EPSILON2;
+
+            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+            // Convert 2D cell index to 1D index
+            int cell_index = cell_y * grid_size + cell_x;
+
+            cellParticles[cell_index].push_back(&particles[i]);
+            cells[cell_index].addParticle(&particles[i]);
+            
         }
     }
-
+    
     void simulate(long n_time_steps)
     {
         for (long i = 0; i < n_time_steps; i++)  //TODO main loop with the right steps
         {
-          
+        //Calculate Cell center of mass
+
+            //Calculate force for particles
+            //Update position and velocity
+            //Check collisons
         }
     }
 
