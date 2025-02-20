@@ -43,117 +43,111 @@ public:
 
 class Particle
 {
+private:
+    void updatePositionAndVelocity(double ax, double ay)
+    {
+        x += vx * DELTAT + 0.5 * ax * DELTAT * DELTAT;
+        y += vy * DELTAT + 0.5 * ay * DELTAT * DELTAT;
 
+        vx += ax * DELTAT;
+        vy += ay * DELTAT;
+    }
 public:
     double x, y;   // Position
     double vx, vy; // Velocity
     double m;      // Mass
+    double fx, fy;  // Force
     bool alive;    // has Collided
 
     Particle() : x(0), y(0), vx(0), vy(0), m(0), alive(true) {}
 
-    // Add methods for particle behavior here
-    void updatePosition(double dt)
-    {
-        x += vx * dt;
-        y += vy * dt;
-    }
-
-    void updatePositionAndVelocity(double dt, double ax, double ay)
-    {
-        x += vx * dt + 0.5 * ax * dt * dt;
-        y += vy * dt + 0.5 * ay * dt * dt;
-
-        vx += ax * dt; // Optionally update velocity
-        vy += ay * dt;
-    }
-
-    std::pair<double, double> calculateForceBetweenParticles(const Particle &p2)
-    {
-        double dx = p2.x - x;
-        double dy = p2.y - y;
-        // TODO: Why epsilon?
-        double distSquared = dx * dx + dy * dy + EPSILON2;
+    void calculateForceBetweenParticles(Particle *p2) {
+        double dx = p2->x - x;
+        double dy = p2->y - y;
+    
+        // Small constant to avoid division by zero issues
+        double distSquared = dx * dx + dy * dy;
         double dist = std::sqrt(distSquared);
-        double forceMagnitude = (G * m * p2.m) / distSquared;
-
-        // Normalize direction
-        double fx = forceMagnitude * (dx / dist);
-        double fy = forceMagnitude * (dy / dist);
-
-        return {fx, fy};
+        if (dist == 0) {
+            return; // Avoid self-force
+        }
+    
+        double forceMagnitude = (G * m * p2->m) / distSquared;
+    
+        // Normalize and apply force
+        double fx_add = forceMagnitude * (dx / dist);
+        double fy_add = forceMagnitude * (dy / dist);
+    
+        fx += fx_add;
+        fy += fy_add;
+        p2->fx -= fx_add;
+        p2->fy -= fy_add;
     }
 
-    std::pair<double, double> calculateForceWithCell(const Cell &c)
+    void calculateForceWithCell(const Cell *c)
     {
-        double dx = c.x - x;
-        double dy = c.y - y;
-        // TODO: Why epsilon?
-        double distSquared = dx * dx + dy * dy + EPSILON2;
+        double dx = c->x - x;
+        double dy = c->y - y;
+    
+        // Small constant to avoid division by zero issues
+        double distSquared = dx * dx + dy * dy;
         double dist = std::sqrt(distSquared);
-        double forceMagnitude = (G * m * c.m) / distSquared;
-
-        // Normalize direction
-        double fx = forceMagnitude * (dx / dist);
-        double fy = forceMagnitude * (dy / dist);
-
-        return {fx, fy};
+        if (dist == 0) {
+            return; // Avoid self-force
+        }
+    
+        double forceMagnitude = (G * m * c->m) / distSquared;
+    
+        // Normalize and apply force
+        fx += forceMagnitude * (dx / dist);
+        fy += forceMagnitude * (dy / dist);
     }
 
-    void applyForce(double fx, double fy, double dt)
+
+    void applyForce()
     {
         double ax = fx / m;
         double ay = fy / m;
 
-        updatePositionAndVelocity(ax, ay, dt);
+        updatePositionAndVelocity(ax, ay);
+    }
+
+    void getDistance(Particle* p) {
+        
     }
 };
 
 class Cell
 {
 public:
-    unsigned int unique_id; // Unique identifier
-    double x, y;            // Center of Mass
+    double mx, my;          // Center of Mass
     double m;               // Mass
+    int x, y;               // Cell position
 
-    Cell(unsigned int id = 0) : unique_id(id), x(0), y(0), m(0) {}
+    Cell(unsigned int id = 0) : mx(0), my(0), m(0) , x(0), y(0) {}
 
     void addParticle(Particle* p) {
         m += p->m;
-        x += p->m * p->x;
-        y += p->m * p->y;
+        mx += p->m * p->x;
+        my += p->m * p->y;
     }
 
-    std::pair<double, double> getCOM(){
-        return {x/m, y/m};
-    }
-
-    void resetCOM(){
-        m = 0;
-        x = 0;
-        y = 0;
+    void addParticle(Particle* p) {
+        if (m == 0) { 
+            mx = p->x;
+            my = p->y;
+        } else {
+            mx = (mx * m + p->m * p->x) / (m + p->m);
+            my = (my * m + p->m * p->y) / (m + p->m);
+        }
+        m += p->m;
     }
     
-};
-
-struct CellBounds
-{
-    long start, end;
 };
 
 class ParticleSimulation
 {
 private:
-    // std::vector<Particle> particles;         // particle data
-    // std::vector<Particle*> cell_sorted;        // array de ponteiros para a data que servirá como middle man para o sort
-    //                                            // assim a actual data esta sempre no mesmo sitio. (mais eficiente ) sera worth tho ?
-    // std::vector<CellBounds> cell_boundaries; // cell boundaries estes bounds sao o inicio e o fim (indices) do array cell_sorted assim se 
-    //                                          // fizermos cell_boundaries[0].start / .end sabemos quais particulas estao na cell 0 rapidamente 
-
-    // RandomGenerator rng;
-    // double side_length;
-    // long grid_size;
-
     std::vector<Particle> particles;
     std::vector<std::vector<Particle *>> cellParticles;
     std::vector<Cell> cells;
@@ -185,30 +179,87 @@ public:
             
         }
     }
+
+    void updateCOM(){
+        cellParticles.assign(grid_size * grid_size, std::vector<Particle*>{});
+        cells.assign(grid_size * grid_size, Cell{});  
+        for (size_t i = 0; i < particles.size(); i++)
+        {
+            // Calculate cell index
+            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+            // Convert 2D cell index to 1D index
+            int cell_index = cell_y * grid_size + cell_x;
+
+            cellParticles[cell_index].push_back(&particles[i]);
+            cells[cell_index].addParticle(&particles[i]);
+            cells[cell_index].x = cell_x;
+            cells[cell_index].y = cell_y;
+        }
+    }
+    
+
+    void updateForces(){
+        for(int i = 0 ; i < cellParticles.size();i++){ // percorrer todas as cells
+            for(int j = 0;j<cellParticles[i].size();i++){ // por cada por todas as particulas de cada cell
+                   for(int k = j+1; j<cellParticles[i].size()-1;k++){ // ver todas as outras particulas dentro da mesma cell
+                        cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                   }
+                // ver as cells que estao arround desta particula
+
+                for(int dx=-1;dx<1;dx++){
+                    for(int dy=-1; dy<1;dy++){
+                        if(cells[i].x==0 && cells[i].y==0){continue;} // salta a cell do meio 
+
+                        int neighbour_cell_x = cells[i].x + dx;
+                        int neighbour_cell_y = cells[i].y + dy;
+
+                        if(neighbour_cell_x>=0 && neighbour_cell_y >=0 && neighbour_cell_x < grid_size && neighbour_cell_y < grid_size){
+                           
+                            cellParticles[i][j]->calculateForceWithCell();
+
+                        }else{
+                            //necessario loop back
+
+                        }
+                        
+                    }
+                    
+                }
+
+            }
+        }
+    }
+
+    void updatePositionAndVelocity(){
+        for (size_t i = 0; i < particles.size(); i++)
+        {
+            particles[i].applyForce();
+        }
+    }
+
+    void checkCollisions(){
+        for (int i = 0; i < cellParticles.size(); i++) {
+            std::vector<Particle*> collisionVector;
+            for (int j = 0; j < cellParticles[i].size(); j++) {
+                for (int k = j + 1; k < cellParticles[i].size(); k++) {
+                    
+                }
+            }
+        }
+    }
     
     void simulate(long n_time_steps)
     {
         for (long i = 0; i < n_time_steps; i++)  //TODO main loop with the right steps
         {
         //Calculate Cell center of mass
-
-
-            for (size_t i = 0; i < particles.size(); i++)
-            {
-                cellParticles.resize(grid_size * grid_size);
-                cells.resize(grid_size * grid_size);
-                // Calculate cell index
-                int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-                int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
-
-                // Convert 2D cell index to 1D index
-                int cell_index = cell_y * grid_size + cell_x;
-
-                cellParticles[cell_index].push_back(&particles[i]);
-                cells[cell_index].addParticle(&particles[i]);
-            }
+            updateCOM();
             //Calculate force for particles
+            updateForces();
             //Update position and velocity
+            updatePositionAndVelocity();
             //Check collisons
         }
     }
