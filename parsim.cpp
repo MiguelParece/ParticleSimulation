@@ -5,6 +5,7 @@
 #include <random>
 #include <stdexcept>
 #include <string>
+#include <unordered_set>
 
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
@@ -112,8 +113,8 @@ public:
         updatePositionAndVelocity(ax, ay);
     }
 
-    void getDistance(Particle* p) {
-        
+    double getDistance(Particle* p) {
+        return sqrt(pow((x - p->x), 2) + pow((y - p->y), 2));
     }
 };
 
@@ -237,11 +238,24 @@ public:
 
     void checkCollisions(){
         for (int i = 0; i < cellParticles.size(); i++) {
-            std::vector<Particle*> collisionVector;
+            std::unordered_set<Particle*> collisionSet;
             for (int j = 0; j < cellParticles[i].size(); j++) {
                 for (int k = j + 1; k < cellParticles[i].size(); k++) {
-                    
+                    // check distance between particles
+                    if (cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON2) {
+                        // if particles not in set, increment collision counter
+                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][j]) == 0) {
+                            collisions++;
+                        }
+                        // if distance < epsilon, add particles to set
+                        collisionSet.insert(cellParticles[i][j]);
+                        collisionSet.insert(cellParticles[i][k]);
+                    }
+                    // if particles not in set, increment collision counter
                 }
+            }
+            for (const auto& elem : collisionSet) {
+                elem->alive = false;
             }
         }
     }
@@ -257,6 +271,7 @@ public:
             //Update position and velocity
             updatePositionAndVelocity();
             //Check collisons
+            checkCollisions();
         }
     }
 
