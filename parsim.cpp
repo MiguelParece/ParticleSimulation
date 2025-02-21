@@ -217,14 +217,11 @@ public:
             std::vector<Cell> temp_cells(8); // temp vector to store the neighbour
 
             // calculate the neighbout cells
-            for (int dx = -1; dx < 1; dx++)
+            for (int dx = -1; dx <= 1; dx++)
             {
-                for (int dy = -1; dy < 1; dy++)
+                for (int dy = -1; dy <= 1; dy++)
                 {
-                    if (cells[i].x == 0 && cells[i].y == 0)
-                    {
-                        continue;
-                    } // salta a cell do meio
+                    if (dx == 0 && dy == 0) continue; //Salta a cell do meio
 
                     int neighbour_cell_x = cells[i].x + dx;
                     int neighbour_cell_y = cells[i].y + dy;
@@ -259,8 +256,8 @@ public:
 
                     // somar as coordenadas
 
-                    temp_cell.mx += cells[cell_index].x;
-                    temp_cell.my += cells[cell_index].y;
+                    temp_cell.mx += cells[cell_index].mx;
+                    temp_cell.my += cells[cell_index].my;
 
                     temp_cell.m = cells[cell_index].m;
                     // adicionar a cell ao array
@@ -309,7 +306,7 @@ public:
                     if (cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                     {
                         // if particles not in set, increment collision counter
-                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][j]) == 0)
+                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                         {
                             collisions++;
                         }
@@ -329,7 +326,7 @@ public:
 
     void simulate(long n_time_steps)
     {
-        for (long i = 0; i <= n_time_steps; i++) // TODO main loop with the right steps
+        for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             std::cout << "t=" << i*0.1 << std::endl;
             for (size_t j = 0; j < particles.size(); j++)
