@@ -1,2 +1,5 @@
 parsim
 .vscode/
+output
+ex-debug-info.txt
+output.txt
