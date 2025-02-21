@@ -100,7 +100,7 @@ public:
     }
 };
 
-void Particle::calculateForceWithCell(const Cell *c)
+void Particle::calculateForceWithCell(const Cell *c) // TODO: mudar isto para ser com coordenadas
 {
     double dx = c->mx - x; // Changed from c->x to c->mx
     double dy = c->my - y; // Changed from c->y to c->my
