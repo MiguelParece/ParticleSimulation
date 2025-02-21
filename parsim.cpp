@@ -82,7 +82,7 @@ public:
     double m;      // Mass
     int x, y;      // Cell position
 
-    Cell(unsigned int id = 0) : mx(0), my(0), m(0), x(0), y(0) {}
+    Cell() : mx(0), my(0), m(0), x(0), y(0) {}
 
     void addParticle(Particle *p)
     {
@@ -212,34 +212,68 @@ public:
     {
         for (int i = 0; i < cellParticles.size(); i++)
         { // percorrer todas as cells
+
+            std::vector<Cell> temp_cells(8); // temp vector to store the neighbour cells
+            
+            // calculate the neighbout cells
+            for (int dx = -1; dx < 1; dx++){
+                for (int dy = -1; dy < 1; dy++){
+                    if (cells[i].x == 0 && cells[i].y == 0){
+                        continue;
+                    } // salta a cell do meio
+
+                    int neighbour_cell_x = cells[i].x + dx;
+                    int neighbour_cell_y = cells[i].y + dy;
+
+                    Cell temp_cell = Cell();
+                    
+
+                    // loop around mirror math
+                    // perceber se temos de somar ou subtrair o grid lenght
+                    if ( neighbour_cell_x >= grid_size){
+                        temp_cell.mx += side_length;
+                    }else if(neighbour_cell_x < 0){
+                        temp_cell.mx -= side_length;
+                    }
+                    if (neighbour_cell_y >= grid_size){
+                        temp_cell.my += side_length;
+                    }else if (neighbour_cell_y <0){
+                        temp_cell.my -= side_length;
+                    }
+                    
+
+
+                    // garantir que obtemos a mirror cell
+                    neighbour_cell_x = (neighbour_cell_x + grid_size) % grid_size; // calcula o mirror caso seja preciso
+                    neighbour_cell_y = (neighbour_cell_y + grid_size) % grid_size;
+                    
+                    //obter o index  cell
+                    int cell_index = neighbour_cell_x + neighbour_cell_y * grid_size;
+
+                    //somar as coordenadas
+
+                    temp_cell.mx += cells[cell_index].x;
+                    temp_cell.my += cells[cell_index].y;
+                    
+                    temp_cell.m = cells[cell_index].m;
+                    //adicionar a cell ao array
+
+                    temp_cells.push_back(temp_cell);
+                }
+            }
+
             for (int j = 0; j < cellParticles[i].size(); j++)
             { // por cada por todas as particulas de cada cell
                 if(j != cellParticles[i].size()-1){  //evitar calculos duplicados
                     for (int k = j + 1; k < cellParticles[i].size(); k++){ // ver todas as outras particulas dentro da mesma cell
-                        //if(j == cellParticles[i].size()-1) && k =  )
                         cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                        
                     }
                 }
 
-                // ver as cells que estao arround desta particula
-                for (int dx = -1; dx < 1; dx++)
-                {
-                    for (int dy = -1; dy < 1; dy++)
-                    {
-                        if (cells[i].x == 0 && cells[i].y == 0)
-                        {
-                            continue;
-                        } // salta a cell do meio
-
-                        int neighbour_cell_x = cells[i].x + dx;
-                        int neighbour_cell_y = cells[i].y + dy;
-
-                        // necessario loopback
-                        neighbour_cell_x = (neighbour_cell_x + grid_size) % grid_size; // calcula o mirror caso seja preciso
-                        neighbour_cell_y = (neighbour_cell_y + grid_size) % grid_size;
-                        int neighbour_cell_index = neighbour_cell_y + neighbour_cell_y * grid_size;
-                        cellParticles[i][j]->calculateForceWithCell(&cells[neighbour_cell_index]);
-                    }
+                // calcular as forcas
+                for (int l =0 ; l <temp_cells.size();l++){
+                    cellParticles[i][j]->calculateForceWithCell(&temp_cells[l]); //TODO : pode dar merda
                 }
             }
         }
