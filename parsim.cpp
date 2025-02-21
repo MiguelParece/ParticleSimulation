@@ -214,13 +214,13 @@ public:
         { // percorrer todas as cells
             for (int j = 0; j < cellParticles[i].size(); j++)
             { // por cada por todas as particulas de cada cell
-                // TODO: talvez seja size+1
-                for (int k = j + 1; j < cellParticles[i].size(); k++)
-                { // ver todas as outras particulas dentro da mesma cell
+                if(j != cellParticles[i].size()-1){  //evitar calculos duplicados
+                    for (int k = j + 1; j < cellParticles[i].size(); k++){ // ver todas as outras particulas dentro da mesma cell
                     cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                    }
                 }
-                // ver as cells que estao arround desta particula
 
+                // ver as cells que estao arround desta particula
                 for (int dx = -1; dx < 1; dx++)
                 {
                     for (int dy = -1; dy < 1; dy++)
