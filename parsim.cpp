@@ -213,7 +213,9 @@ public:
         for (int i = 0; i < cellParticles.size(); i++)
         { // percorrer todas as cells
 
-            std::vector<Cell> temp_cells(8); // temp vector to store the neighbour cells
+            //TODO: mudar para ser coordenadas depois
+            std::vector<Cell> temp_cells(8); // temp vector to store the neighbour 
+
             
             // calculate the neighbout cells
             for (int dx = -1; dx < 1; dx++){
