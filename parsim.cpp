@@ -215,8 +215,9 @@ public:
             for (int j = 0; j < cellParticles[i].size(); j++)
             { // por cada por todas as particulas de cada cell
                 if(j != cellParticles[i].size()-1){  //evitar calculos duplicados
-                    for (int k = j + 1; j < cellParticles[i].size(); k++){ // ver todas as outras particulas dentro da mesma cell
-                    cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                    for (int k = j + 1; k < cellParticles[i].size(); k++){ // ver todas as outras particulas dentro da mesma cell
+                        //if(j == cellParticles[i].size()-1) && k =  )
+                        cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
                     }
                 }
 
