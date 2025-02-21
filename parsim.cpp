@@ -12,36 +12,37 @@
 #define EPSILON2 (0.005 * 0.005)
 #define DELTAT 0.1
 
-class RandomGenerator
-{
-private:
-    unsigned int seed;
-
-public:
-    RandomGenerator(int input_seed) : seed(input_seed + 987654321) {}
-
-    double uniform01()
-    {
-        int seed_in = seed;
-        seed ^= (seed << 13);
-        seed ^= (seed >> 17);
-        seed ^= (seed << 5);
-        return 0.5 + 0.2328306e-09 * (seed_in + static_cast<int>(seed));
-    }
-
-    double normal01()
-    {
-        double u1, u2, z, result;
-        do
-        {
-            u1 = uniform01();
-            u2 = uniform01();
-            z = std::sqrt(-2 * std::log(u1)) * std::cos(2 * M_PI * u2);
-            result = 0.5 + 0.15 * z; // Shift mean to 0.5 and scale
-        } while (result < 0 || result >= 1);
-        return result;
-    }
-};
+class RandomGenerator {
+    private:
+        unsigned int seed;
+        bool useNormal;
+    
+    public:
+        RandomGenerator(int input_seed) : seed(abs(input_seed) + 987654321), useNormal(input_seed < 0) {}
+    
+        double uniform01() {
+            int seed_in = seed;
+            seed ^= (seed << 13);
+            seed ^= (seed >> 17);
+            seed ^= (seed << 5);
+            return 0.5 + 0.2328306e-09 * (seed_in + static_cast<int>(seed));
+        }
+    
+        double normal01() {
+            double u1, u2, z, result;
+            do {
+                u1 = uniform01();
+                u2 = uniform01();
+                z = std::sqrt(-2 * std::log(u1)) * std::cos(2 * M_PI * u2);
+                result = 0.5 + 0.15 * z; // Shift mean to 0.5 and scale
+            } while (result < 0 || result >= 1);
+            return result;
+        }
+    
+        double getRandom01() {
+            return useNormal ? normal01() : uniform01();
+        }
+    };
 
 class Cell;
 
@@ -174,17 +175,15 @@ public:
 
     void init_particles()
     {
-        auto rnd01 = [this]()
-        { return rng.uniform01(); };
 
         for (size_t i = 0; i < particles.size(); i++)
         {
-            particles[i].x = rnd01() * side_length;
-            particles[i].y = rnd01() * side_length;
-            particles[i].vx = (rnd01() - 0.5) * side_length / grid_size / 5.0;
-            particles[i].vy = (rnd01() - 0.5) * side_length / grid_size / 5.0;
-            particles[i].m = rnd01() * 0.01 * (grid_size * grid_size) /
-                             particles.size() / G * EPSILON2;
+            particles[i].x = rng.getRandom01() * side_length;
+            particles[i].y = rng.getRandom01() * side_length;
+            particles[i].vx = (rng.getRandom01() - 0.5) * side_length / grid_size / 5.0;
+            particles[i].vy = (rng.getRandom01() - 0.5) * side_length / grid_size / 5.0;
+            particles[i].m = rng.getRandom01() * 0.01 * (grid_size * grid_size) /
+                           particles.size() / G * EPSILON2;
         }
     }
 
