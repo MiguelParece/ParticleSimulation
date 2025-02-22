@@ -295,28 +295,29 @@ public:
     void checkCollisions()
     {
         for (int i = 0; i < cellParticles.size(); i++)
-        {
-            std::unordered_set<Particle *> collisionSet;
+        {   
+            std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
             for (int j = 0; j < cellParticles[i].size(); j++)
             {
-                for (int k = j + 1; k < cellParticles[i].size(); k++)
-                {
-                    // check distance between particles
-                    if (cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
+                if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
+                    for (int k = j + 1; k < cellParticles[i].size(); k++)
                     {
-                        // if particles not in set, increment collision counter
-                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
+                        // if both particles are alive, check if distance between them is smaller than EPSILON
+                        if (cellParticles[i][k]->alive == true &&
+                            cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                         {
-                            collisions++;
+                            // if distance < epsilon, add particles to set
+                            collisionSet.insert(cellParticles[i][j]);
+                            collisionSet.insert(cellParticles[i][k]);
+
+                            // if particles not in set, new collision detected
+                            if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
+                                collisions++;
                         }
-                        // if distance < epsilon, add particles to set
-                        collisionSet.insert(cellParticles[i][j]);
-                        collisionSet.insert(cellParticles[i][k]);
                     }
-                    // if particles not in set, increment collision counter
                 }
             }
-            for (const auto &elem : collisionSet)
+            for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
             {
                 elem->alive = false;
             }
