@@ -306,13 +306,13 @@ public:
                         if (cellParticles[i][k]->alive == true &&
                             cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                         {
-                            // if distance < epsilon, add particles to set
-                            collisionSet.insert(cellParticles[i][j]);
-                            collisionSet.insert(cellParticles[i][k]);
-
                             // if particles not in set, new collision detected
                             if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                                 collisions++;
+
+                            // add particles to set since new they have collided
+                            collisionSet.insert(cellParticles[i][j]);
+                            collisionSet.insert(cellParticles[i][k]);
                         }
                     }
                 }
