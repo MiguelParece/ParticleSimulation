@@ -65,7 +65,7 @@ public:
     double fx, fy; // Force
     bool alive;    // has Collided
 
-    Particle() : x(0), y(0), vx(0), vy(0), m(0), alive(true) {}
+    Particle() : x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true) {}
 
     void calculateForceBetweenParticles(Particle *p2);
     void calculateForceWithCell(const Cell *c);
@@ -145,6 +145,8 @@ void Particle::calculateForceBetweenParticles(Particle *p2)
 
 void Particle::applyForce()
 {
+    if (m == 0) return;
+    
     double ax = fx / m;
     double ay = fy / m;
 
@@ -163,14 +165,19 @@ private:
     std::vector<Cell> cells;
     RandomGenerator rng;
     double side_length;
-    long grid_size;
+    long grid_size = 0;
     long collisions = 0;
 
 public:
     ParticleSimulation(long seed, double side, long ncside, long long n_part)
-        : particles(n_part), rng(seed), side_length(side), grid_size(ncside)
+    : particles(n_part), 
+    cellParticles(ncside * ncside),
+    cells(ncside * ncside),
+    rng(seed), 
+    side_length(side), 
+    grid_size(ncside)
     {
-        init_particles();
+    init_particles();
     }
 
     void init_particles()
@@ -190,12 +197,18 @@ public:
     void updateCellParticles()
     {
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
-        cells.assign(grid_size * grid_size, Cell{});
+        cells.assign(grid_size * grid_size, Cell{}); //TODO: Precisamos disto?
         for (size_t i = 0; i < particles.size(); i++)
         {
             // Calculate cell index
             int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
             int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
+                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
+                std::cout << "[PANIC3] Cell out of bounds" << std::endl;
+                continue;
+            }
 
             // Convert 2D cell index to 1D index
             int cell_index = cell_y * grid_size + cell_x;
@@ -216,6 +229,11 @@ public:
 
             // Convert 2D cell index to 1D index
             int cell_index = cell_y * grid_size + cell_x;
+            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
+                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
+                std::cout << "[PANIC2] Cell out of bounds" << std::endl;
+                continue;
+            }
 
             cellParticles[cell_index].push_back(&particles[i]);
             cells[cell_index].addParticle(&particles[i]);
@@ -230,7 +248,8 @@ public:
         { // percorrer todas as cells
 
             // TODO: mudar para ser coordenadas depois
-            std::vector<Cell> temp_cells(8); // temp vector to store the neighbour
+            std::vector<Cell> temp_cells; // Remove initial size
+            temp_cells.reserve(8); // Reserve space for efficiency
 
             // calculate the neighbout cells
             for (int dx = -1; dx <= 1; dx++)
@@ -267,8 +286,14 @@ public:
                     neighbour_cell_x = (neighbour_cell_x + grid_size) % grid_size; // calcula o mirror caso seja preciso
                     neighbour_cell_y = (neighbour_cell_y + grid_size) % grid_size;
 
+                    if (neighbour_cell_x < 0 || neighbour_cell_x >= grid_size || neighbour_cell_y < 0 || neighbour_cell_y >= grid_size) {
+                        std::cout << "[PANIC1] Cell out of bounds" << std::endl;
+                        continue;
+                    }
+
                     // obter o index  cell
                     int cell_index = neighbour_cell_x + neighbour_cell_y * grid_size;
+                    
 
                     // somar as coordenadas
 
@@ -288,14 +313,18 @@ public:
                 { // evitar calculos duplicados
                     for (int k = j + 1; k < cellParticles[i].size(); k++)
                     { // ver todas as outras particulas dentro da mesma cell
-                        cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                            if (cellParticles[i][j]->alive == true && cellParticles[i][k]->alive == true){
+                                cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                            }
                     }
                 }
 
                 // calcular as forcas
                 for (int l = 0; l < temp_cells.size(); l++)
                 {
-                    cellParticles[i][j]->calculateForceWithCell(&temp_cells[l]); // TODO : pode dar merda
+                    if (cellParticles[i][j]->alive == true){
+                        cellParticles[i][j]->calculateForceWithCell(&temp_cells[l]);
+                    }
                 }
             }
         }
@@ -325,7 +354,7 @@ public:
                             cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                         {
                             // if particles not in set, new collision detected
-                            std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
+                            //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
                             if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                                 collisions++;
 
@@ -346,14 +375,14 @@ public:
 
     void simulate(long n_time_steps)
     {
-        for (size_t j = 0; j < particles.size(); j++)
-            {
-                std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
-            }
-            for (size_t j = 0; j < cells.size(); j++)
-            {
-                std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
-            }
+        // for (size_t j = 0; j < particles.size(); j++)
+        //     {
+        //         // std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
+        //     }
+        //     for (size_t j = 0; j < cells.size(); j++)
+        //     {
+        //         // std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
+        //     }
         for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             // Calculate Cell center of mass
@@ -364,11 +393,11 @@ public:
             updatePositionAndVelocity();
             // Check collisons
             checkCollisions();
-            std::cout << "t=" << i << std::endl;
-            for (size_t j = 0; j < particles.size(); j++)
-            {
-                std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
-            }
+            // std::cout << "t=" << i << std::endl;
+            // for (size_t j = 0; j < particles.size(); j++)
+            // {
+            //     std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
+            // }
         }
 
         std::cout << std::fixed << std::setprecision(3) << particles[0].x << " " << particles[0].y << std::endl;
