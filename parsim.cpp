@@ -299,6 +299,9 @@ public:
             std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
             for (int j = 0; j < cellParticles[i].size(); j++)
             {
+                if (j==7){
+                    std::cout << "Particle " << j << " x: " << cellParticles[i][j]->x << " y: " << cellParticles[i][j]->y << std::endl;
+                }
                 if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
                     for (int k = j + 1; k < cellParticles[i].size(); k++)
                     {
@@ -307,6 +310,7 @@ public:
                             cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                         {
                             // if particles not in set, new collision detected
+                            std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
                             if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                                 collisions++;
 
