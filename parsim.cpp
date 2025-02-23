@@ -7,6 +7,7 @@
 #include <string>
 #include <unordered_set>
 #include <iomanip>
+#include <algorithm>
 
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
@@ -145,7 +146,11 @@ void Particle::calculateForceBetweenParticles(Particle *p2)
 
 void Particle::applyForce()
 {
-    if (m == 0) return;
+    if (m == 0) {
+        fx = 0;
+        fy = 0;
+        return;
+    }
     
     double ax = fx / m;
     double ay = fy / m;
@@ -203,9 +208,13 @@ public:
             // Calculate cell index
             int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
             int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+            
+            cell_x = std::min<int>(cell_x, grid_size - 1); //TODO: Can we do this?
+            cell_y = std::min<int>(cell_y, grid_size - 1); //TODO: Can we do this?
 
             if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
+                std::cout << "cellx " << cell_x << " celly " << cell_y << std::endl;
+                std::cout << "gridsize: " << grid_size << std::endl;
                 std::cout << "[PANIC3] Cell out of bounds" << std::endl;
                 continue;
             }
@@ -226,6 +235,9 @@ public:
             // Calculate cell index
             int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
             int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+            cell_x = std::min<int>(cell_x, grid_size - 1); //TODO: Can we do this?
+            cell_y = std::min<int>(cell_y, grid_size - 1); //TODO: Can we do this?
 
             // Convert 2D cell index to 1D index
             int cell_index = cell_y * grid_size + cell_x;
