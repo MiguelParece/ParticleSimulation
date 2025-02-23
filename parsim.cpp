@@ -325,6 +325,7 @@ public:
                             cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
                         {
                             // if particles not in set, new collision detected
+                            std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
                             if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                                 collisions++;
 
