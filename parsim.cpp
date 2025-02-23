@@ -187,6 +187,23 @@ public:
         }
     }
 
+    void updateCellParticles()
+    {
+        cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
+        cells.assign(grid_size * grid_size, Cell{});
+        for (size_t i = 0; i < particles.size(); i++)
+        {
+            // Calculate cell index
+            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+            // Convert 2D cell index to 1D index
+            int cell_index = cell_y * grid_size + cell_x;
+
+            cellParticles[cell_index].push_back(&particles[i]);
+        }
+    }
+
     void updateCOM()
     {
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
@@ -290,6 +307,7 @@ public:
         {
             particles[i].applyForce();
         }
+        updateCellParticles();
     }
 
     void checkCollisions()
