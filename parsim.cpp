@@ -320,12 +320,21 @@ public:
             for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
             {
                 elem->alive = false;
+                elem->m = 0;
             }
         }
     }
 
     void simulate(long n_time_steps)
     {
+        for (size_t j = 0; j < particles.size(); j++)
+            {
+                std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
+            }
+            for (size_t j = 0; j < cells.size(); j++)
+            {
+                std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
+            }
         for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             // Calculate Cell center of mass
@@ -336,17 +345,11 @@ public:
             updatePositionAndVelocity();
             // Check collisons
             checkCollisions();
+            std::cout << "t=" << i << std::endl;
             for (size_t j = 0; j < particles.size(); j++)
             {
                 std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
             }
-            if (i == 0){
-                for (size_t j = 0; j < cells.size(); j++)
-                {
-                    std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
-                }
-            }
-            std::cout << "t=" << i << std::endl;
         }
 
         std::cout << std::fixed << std::setprecision(3) << particles[0].x << " " << particles[0].y << std::endl;
