@@ -299,9 +299,6 @@ public:
             std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
             for (int j = 0; j < cellParticles[i].size(); j++)
             {
-                if (j==7){
-                    std::cout << "Particle " << j << " x: " << cellParticles[i][j]->x << " y: " << cellParticles[i][j]->y << std::endl;
-                }
                 if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
                     for (int k = j + 1; k < cellParticles[i].size(); k++)
                     {
