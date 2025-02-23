@@ -54,8 +54,12 @@ for test in "${tests[@]}"; do
     total_tests=$((total_tests + 1))
     echo "Test $total_tests: ./parsim $input"
     
-    # Run the program and capture output
+    # Run the program and capture output and time
+    start_time=$(date +%s.%N)
     output=$(./parsim $input)
+    end_time=$(date +%s.%N)
+    execution_time=$(echo "$end_time - $start_time" | bc)
+    
     if [ $? -ne 0 ]; then
         echo -e "${RED}Test $total_tests Failed: Program crashed${NC}"
         continue
@@ -93,6 +97,9 @@ for test in "${tests[@]}"; do
     else
         echo -e "${RED}Test $total_tests Failed${NC}"
     fi
+    
+    # Print execution time
+    printf "Execution time: %.6f seconds\n" $execution_time
     echo "----------------"
 done
 
