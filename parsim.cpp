@@ -47,11 +47,9 @@ class RandomGenerator {
 
 class Cell;
 
-class Particle
-{
+class Particle {
 private:
-    void updatePositionAndVelocity(double ax, double ay)
-    {
+    void updatePositionAndVelocity(double ax, double ay){
         x += vx * DELTAT + 0.5 * ax * DELTAT * DELTAT;
         y += vy * DELTAT + 0.5 * ay * DELTAT * DELTAT;
 
@@ -70,7 +68,7 @@ public:
 
     void calculateForceBetweenParticles(Particle *p2);
     void calculateForceWithCell(const Cell *c);
-    void applyForce();
+    void applyForce(double sidelen);
 
     double getDistance(Particle *p)
     {
@@ -103,7 +101,7 @@ public:
     }
 };
 
-void Particle::calculateForceWithCell(const Cell *c) // TODO: mudar isto para ser com coordenadas
+void Particle::calculateForceWithCell(const Cell *c) 
 {
     double dx = c->mx - x; // Changed from c->x to c->mx
     double dy = c->my - y; // Changed from c->y to c->my
@@ -144,8 +142,7 @@ void Particle::calculateForceBetweenParticles(Particle *p2)
     p2->fy -= fy_add;
 }
 
-void Particle::applyForce()
-{
+void Particle::applyForce(double sidelen){
     if (m == 0) {
         fx = 0;
         fy = 0;
@@ -156,6 +153,9 @@ void Particle::applyForce()
     double ay = fy / m;
 
     updatePositionAndVelocity(ax, ay);
+    
+    x = fmod((x + sidelen), sidelen);
+    y = fmod((y + sidelen), sidelen);
 
     // Reset forces for next iteration
     fx = 0;
@@ -209,12 +209,8 @@ public:
             int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
             int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
             
-            cell_x = std::min<int>(cell_x, grid_size - 1); //TODO: Can we do this?
-            cell_y = std::min<int>(cell_y, grid_size - 1); //TODO: Can we do this?
-
+            //TODO: REMOVE prints
             if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                std::cout << "cellx " << cell_x << " celly " << cell_y << std::endl;
-                std::cout << "gridsize: " << grid_size << std::endl;
                 std::cout << "[PANIC3] Cell out of bounds" << std::endl;
                 continue;
             }
@@ -236,9 +232,6 @@ public:
             int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
             int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
 
-            cell_x = std::min<int>(cell_x, grid_size - 1); //TODO: Can we do this?
-            cell_y = std::min<int>(cell_y, grid_size - 1); //TODO: Can we do this?
-
             // Convert 2D cell index to 1D index
             int cell_index = cell_y * grid_size + cell_x;
             if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
@@ -259,7 +252,6 @@ public:
         for (int i = 0; i < cellParticles.size(); i++)
         { // percorrer todas as cells
 
-            // TODO: mudar para ser coordenadas depois
             std::vector<Cell> temp_cells; // Remove initial size
             temp_cells.reserve(8); // Reserve space for efficiency
 
@@ -342,11 +334,11 @@ public:
         }
     }
 
-    void updatePositionAndVelocity()
+    void updatePositionAndVelocity(double sidelen)
     {
         for (size_t i = 0; i < particles.size(); i++)
         {
-            particles[i].applyForce();
+            particles[i].applyForce(sidelen);
         }
         updateCellParticles();
     }
@@ -402,7 +394,7 @@ public:
             // Calculate force for particles
             updateForces();
             // Update position and velocity
-            updatePositionAndVelocity();
+            updatePositionAndVelocity(side_length);
             // Check collisons
             checkCollisions();
             // std::cout << "t=" << i << std::endl;
