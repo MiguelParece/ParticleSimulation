@@ -63,12 +63,13 @@ public:
     double m;      // Mass
     double fx, fy; // Force
     bool alive;    // has Collided
-
+    int cell_index; // which cell it belongs to
+    
     Particle() : x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true) {}
 
     void calculateForceBetweenParticles(Particle *p2);
     void calculateForceWithCell(const Cell *c);
-    void applyForce(double sidelen);
+    void applyForce(double sidelen,long grid_size,std::vector<Cell> &cells);
 
     double getDistance(Particle *p)
     {
@@ -82,8 +83,10 @@ public:
     double mx, my; // Center of Mass
     double m;      // Mass
     int x, y;      // Cell position
+    bool change_flag;
 
-    Cell() : mx(0), my(0), m(0), x(0), y(0) {}
+
+    Cell() : mx(0), my(0), m(0), x(0), y(0), change_flag(false){}
 
     void addParticle(Particle *p)
     {
@@ -142,7 +145,7 @@ void Particle::calculateForceBetweenParticles(Particle *p2)
     p2->fy -= fy_add;
 }
 
-void Particle::applyForce(double sidelen){
+void Particle::applyForce(double sidelen,long grid_size,std::vector<Cell>& cells){ // TODO: isto ta nojento mas depois muda se
     if (m == 0) {
         fx = 0;
         fy = 0;
@@ -152,10 +155,37 @@ void Particle::applyForce(double sidelen){
     double ax = fx / m;
     double ay = fy / m;
 
+    int cell_y = static_cast<int>(y / (sidelen / grid_size));
+    int cell_x = static_cast<int>(x / (sidelen / grid_size));
+
+    cell_index = cell_y * grid_size + cell_x;
+        
+    //print cell index
+    //std::cout << "cell index: " << cell_index << std::endl;
+
     updatePositionAndVelocity(ax, ay);
     
+
     x = fmod((x + sidelen), sidelen);
     y = fmod((y + sidelen), sidelen);
+
+    cell_y = static_cast<int>(y / (sidelen / grid_size));
+    cell_x = static_cast<int>(x / (sidelen / grid_size));
+
+    int actual_cell_index = cell_y * grid_size + cell_x;
+
+
+    //print cell index and actual cell index
+    // std::cout << "cell index: " << cell_index << " actual cell index: " << actual_cell_index << std::endl;
+
+    if (cell_index != actual_cell_index ){
+        //print
+        //std::cout << "cell index: " << cell_index << " actual cell index: " << actual_cell_index << std::endl;
+        //ativar a flag para depois tirar desta cell e meter na correta
+        cells[cell_index].change_flag=true;
+        //atualizar a cell correta
+        cell_index = actual_cell_index;
+    }
 
     // Reset forces for next iteration
     fx = 0;
@@ -201,26 +231,30 @@ public:
     
     void updateCellParticles()
     {
-        cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
-        cells.assign(grid_size * grid_size, Cell{}); //TODO: Precisamos disto?
-        for (size_t i = 0; i < particles.size(); i++)
-        {
-            // Calculate cell index
-            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
-            
-            //TODO: REMOVE prints
-            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                std::cout << "[PANIC3] Cell out of bounds" << std::endl;
-                continue;
+        for(int i = 0 ; i < cellParticles.size();i++){
+
+            if(cells[i].change_flag){ // esta cell precisa de ser atualizada
+                auto it = cellParticles[i].begin();
+                //print "cell flag"
+                //std::cout << "cell flag" << std::endl;    
+                for(int k = 0 ; k<cellParticles[i].size();k++){
+                    // encontrar todas as particulas que nao deviam estar nesta cell
+                    //1 -remover 2- meter na correta
+                    if (cellParticles[i][k]->cell_index!=i){
+
+                        //print "particula em cell errada"
+                       // std::cout << "particula em cell errada" << std::endl;
+
+                        cellParticles[cellParticles[i][k]->cell_index].push_back(cellParticles[i][k]); // meter particula na cell correta
+                        cellParticles[i].erase(it);
+                    }
+                    ++it;
+                }
+                cells[i].change_flag = false; // reset cell flag
             }
-
-            // Convert 2D cell index to 1D index
-            int cell_index = cell_y * grid_size + cell_x;
-
-            cellParticles[cell_index].push_back(&particles[i]);
         }
-    }
+
+    }   
 
     void updateCOM()
     {
@@ -234,12 +268,18 @@ public:
 
             // Convert 2D cell index to 1D index
             int cell_index = cell_y * grid_size + cell_x;
+
+            //print cell index
+
             if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
                 // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
                 std::cout << "[PANIC2] Cell out of bounds" << std::endl;
                 continue;
             }
 
+            //print index
+
+            particles[i].cell_index = cell_index; // set particle cell index
             cellParticles[cell_index].push_back(&particles[i]);
             cells[cell_index].addParticle(&particles[i]);
             cells[cell_index].x=cell_x;
@@ -338,7 +378,7 @@ public:
     {
         for (size_t i = 0; i < particles.size(); i++)
         {
-            particles[i].applyForce(sidelen);
+            particles[i].applyForce(sidelen,grid_size,cells);
         }
         updateCellParticles();
     }
