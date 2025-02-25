@@ -219,31 +219,19 @@ public:
             int cell_index = cell_y * grid_size + cell_x;
 
             cellParticles[cell_index].push_back(&particles[i]);
+            cells[cell_index].x = cell_x;
+            cells[cell_index].y = cell_y;
         }
     }
 
     void updateCOM()
     {
-        cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
-        cells.assign(grid_size * grid_size, Cell{});
-        for (size_t i = 0; i < particles.size(); i++)
+        for (int i = 0; i < cellParticles.size(); i++)
         {
-            // Calculate cell index
-            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
-
-            // Convert 2D cell index to 1D index
-            int cell_index = cell_y * grid_size + cell_x;
-            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
-                std::cout << "[PANIC2] Cell out of bounds" << std::endl;
-                continue;
+            for (int j = 0; j < cellParticles[i].size(); j++)
+            {
+                cells[i].addParticle(cellParticles[i][j]);
             }
-
-            cellParticles[cell_index].push_back(&particles[i]);
-            cells[cell_index].addParticle(&particles[i]);
-            cells[cell_index].x=cell_x;
-            cells[cell_index].y=cell_y;
         }
     }
 
@@ -387,6 +375,7 @@ public:
         //     {
         //         // std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
         //     }
+        updateCellParticles();
         for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             // Calculate Cell center of mass
