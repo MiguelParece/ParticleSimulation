@@ -241,6 +241,9 @@ public:
             }
 
             cellParticles[cell_index].push_back(&particles[i]);
+            cells[cell_index].addParticle(&particles[i]);
+            cells[cell_index].x=cell_x;
+            cells[cell_index].y=cell_y;
         }
     }
 
