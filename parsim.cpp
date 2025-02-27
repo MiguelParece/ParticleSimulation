@@ -8,9 +8,11 @@
 #include <unordered_set>
 #include <iomanip>
 #include <algorithm>
+#include <omp.h>
 
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
+#define EPSILON 0.005
 #define DELTAT 0.1
 
 class RandomGenerator {
@@ -395,7 +397,7 @@ public:
                     {
                         // if both particles are alive, check if distance between them is smaller than EPSILON
                         if (cellParticles[i][k]->alive == true &&
-                            cellParticles[i][j]->getDistance(cellParticles[i][k]) < sqrt(EPSILON2))
+                            cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON)
                         {
                             // if particles not in set, new collision detected
                             //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
@@ -443,7 +445,9 @@ public:
             //     std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
             // }
         }
+    }
 
+    void print_result(){
         std::cout << std::fixed << std::setprecision(3) << particles[0].x << " " << particles[0].y << std::endl;
         std::cout << collisions << std::endl;
     }
@@ -454,10 +458,8 @@ int main(int argc, char *argv[])
 {
     try
     {
-        if (argc != 6)
-        {
-            throw std::runtime_error("Usage: " + std::string(argv[0]) +
-                                     " <seed> <side_length> <grid_size> <n_particles> <n_timesteps>");
+        if (argc != 6){
+            throw std::runtime_error("Usage: " + std::string(argv[0]) + " <seed> <side_length> <grid_size> <n_particles> <n_timesteps>");
         }
 
         int seed = std::stol(argv[1]);
@@ -466,8 +468,16 @@ int main(int argc, char *argv[])
         long long n_particles = std::stoll(argv[4]);
         long n_timesteps = std::stol(argv[5]);
 
+        double exec_time;
+        
         ParticleSimulation simulation(seed, side_length, grid_size, n_particles);
+        
+        exec_time = -omp_get_wtime();
         simulation.simulate(n_timesteps);
+        exec_time += omp_get_wtime();
+
+        fprintf(stderr, "%.lfs\n", exec_time);
+        simulation.print_result();
 
         return 0;
     }
