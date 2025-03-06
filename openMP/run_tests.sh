@@ -52,11 +52,11 @@ for test in "${tests[@]}"; do
     IFS=":" read -r input expected_coords expected_collisions <<< "$test"
     
     total_tests=$((total_tests + 1))
-    echo "Test $total_tests: ./parsim $input"
+    echo "Test $total_tests: ./parsim-omp $input"
     
     # Run the program and capture output and time
     start_time=$(date +%s.%N)
-    output=$(./parsim $input)
+    output=$(./parsim-omp $input)
     end_time=$(date +%s.%N)
     execution_time=$(echo "$end_time - $start_time" | bc)
     

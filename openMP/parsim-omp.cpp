@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <omp.h>
 
-#define NUM_THREADS 4
+#define NUM_THREADS 2
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
 #define EPSILON 0.005
@@ -42,13 +42,16 @@ class RandomGenerator {
             } while (result < 0 || result >= 1);
             return result;
         }
+    
     double getRandom01() { 
       return useNormal ? normal01() : uniform01(); 
     } 
 }; 
+
 class Cell; 
+
 class Particle {
-    private:
+private:
     void updatePositionAndVelocity(double ax, double ay){
         x += vx * DELTAT + 0.5 * ax * DELTAT * DELTAT;
         y += vy * DELTAT + 0.5 * ay * DELTAT * DELTAT;
@@ -65,7 +68,13 @@ public:
     bool alive;    // has Collided
     int cell_index; // which cell it belongs to
     
-    Particle() : x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true) {}
+    omp_lock_t write_lock;
+    omp_lock_t read_lock;
+
+    Particle() : x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true) {
+        omp_init_lock(&write_lock);
+        omp_init_lock(&read_lock);
+    }
 
     void calculateForceBetweenParticles(Particle *p2);
     void calculateForceWithCell(const Cell *c);
@@ -84,9 +93,13 @@ public:
     double m;      // Mass
     int x, y;      // Cell position
     bool change_flag;
+    omp_lock_t write_lock;
+    omp_lock_t read_lock;
 
-
-    Cell() : mx(0), my(0), m(0), x(0), y(0), change_flag(false){}
+    Cell() : mx(0), my(0), m(0), x(0), y(0), change_flag(false){
+        omp_init_lock(&write_lock);
+        omp_init_lock(&read_lock);
+    }
 
     void addParticle(Particle *p)
     {
@@ -97,10 +110,14 @@ public:
         }
         else
         {
+            omp_set_lock(&write_lock);
             mx = (mx * m + p->m * p->x) / (m + p->m);
             my = (my * m + p->m * p->y) / (m + p->m);
+            omp_unset_lock(&write_lock);
         }
+        omp_set_lock(&write_lock);
         m += p->m;
+        omp_unset_lock(&write_lock);
     }
 };
 
@@ -260,31 +277,49 @@ public:
     {
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
         cells.assign(grid_size * grid_size, Cell{});
-        #pragma omp parallel for
-        for (size_t i = 0; i < particles.size(); i++)
+        #pragma omp parallel
         {
-            // Calculate cell index
-            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
 
-            // Convert 2D cell index to 1D index
-            int cell_index = cell_y * grid_size + cell_x;
+            //array de particulas local
 
-            //print cell index
+            std::vector<std::vector<Particle *>> local_cellParticles(grid_size*grid_size); //TODO: podemos dividir isto corretamente pelas threads
 
-            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
-                std::cout << "[PANIC2] Cell out of bounds" << std::endl;
-                continue;
+            #pragma omp for
+            for (size_t i = 0; i < particles.size(); i++)
+            {
+                // Calculate cell index
+                int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+                int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
+
+                // Convert 2D cell index to 1D index
+                int cell_index = cell_y * grid_size + cell_x;
+
+
+
+                if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
+                    // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
+                    std::cout << "[PANIC2] Cell out of bounds" << std::endl;
+                    continue;
+                }
+
+            
+                particles[i].cell_index = cell_index; // set particle cell index
+                local_cellParticles[cell_index].push_back(&particles[i]);
+                
+                //o add particle tem la dentro locks
+                cells[cell_index].addParticle(&particles[i]);
+                cells[cell_index].x=cell_x;
+                cells[cell_index].y=cell_y;
             }
 
-            //print index
+            //juntar o cell os cellParticles locais 
+            #pragma omp critical
+            {
+                for (size_t j = 0; j < grid_size * grid_size; j++) {
+                    cellParticles[j].insert(cellParticles[j].end(), local_cellParticles[j].begin(), local_cellParticles[j].end());
+                }
+            }
 
-            particles[i].cell_index = cell_index; // set particle cell index
-            cellParticles[cell_index].push_back(&particles[i]);
-            cells[cell_index].addParticle(&particles[i]);
-            cells[cell_index].x=cell_x;
-            cells[cell_index].y=cell_y;
         }
     }
 
