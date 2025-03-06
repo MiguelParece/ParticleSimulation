@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <omp.h>
 
+#define NUM_THREADS 4
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
 #define EPSILON 0.005
@@ -41,16 +42,13 @@ class RandomGenerator {
             } while (result < 0 || result >= 1);
             return result;
         }
-    
-        double getRandom01() {
-            return useNormal ? normal01() : uniform01();
-        }
-    };
-
-class Cell;
-
+    double getRandom01() { 
+      return useNormal ? normal01() : uniform01(); 
+    } 
+}; 
+class Cell; 
 class Particle {
-private:
+    private:
     void updatePositionAndVelocity(double ax, double ay){
         x += vx * DELTAT + 0.5 * ax * DELTAT * DELTAT;
         y += vy * DELTAT + 0.5 * ay * DELTAT * DELTAT;
@@ -262,6 +260,7 @@ public:
     {
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
         cells.assign(grid_size * grid_size, Cell{});
+        #pragma omp parallel for
         for (size_t i = 0; i < particles.size(); i++)
         {
             // Calculate cell index
@@ -467,9 +466,10 @@ int main(int argc, char *argv[])
         long grid_size = std::stol(argv[3]);
         long long n_particles = std::stoll(argv[4]);
         long n_timesteps = std::stol(argv[5]);
-
         double exec_time;
-        
+      
+        omp_set_num_threads(NUM_THREADS);
+
         ParticleSimulation simulation(seed, side_length, grid_size, n_particles);
         
         exec_time = -omp_get_wtime();

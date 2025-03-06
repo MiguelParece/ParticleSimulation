@@ -2,10 +2,10 @@ CXX=g++
 CXXFLAGS=-O2 -I. -fopenmp
 LDFLAGS=-lm
 
-all: parsim
+all: parsim-omp
 
-parsim: parsim.cpp
-	$(CXX) $(CXXFLAGS) -o parsim parsim.cpp $(LDFLAGS)
+parsim-omp:
+	$(CXX) $(CXXFLAGS) -o parsim-omp parsim-omp.cpp $(LDFLAGS)
 
 clean:
-	rm -f parsim
+	rm -f parsim-omp
