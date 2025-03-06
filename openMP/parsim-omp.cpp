@@ -10,7 +10,7 @@
 #include <algorithm>
 #include <omp.h>
 
-#define NUM_THREADS 2
+#define NUM_THREADS 6
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
 #define EPSILON 0.005
@@ -304,6 +304,7 @@ public:
 
             
                 particles[i].cell_index = cell_index; // set particle cell index
+                // fazer assim é melhor do que fazer so com critical porque assim 
                 local_cellParticles[cell_index].push_back(&particles[i]);
                 
                 //o add particle tem la dentro locks
@@ -312,11 +313,13 @@ public:
                 cells[cell_index].y=cell_y;
             }
 
-            //juntar o cell os cellParticles locais 
+            //juntar os cellParticles locais no principal
             #pragma omp critical
             {
                 for (size_t j = 0; j < grid_size * grid_size; j++) {
+                    if(!local_cellParticles[j].empty()){
                     cellParticles[j].insert(cellParticles[j].end(), local_cellParticles[j].begin(), local_cellParticles[j].end());
+                    }
                 }
             }
 
