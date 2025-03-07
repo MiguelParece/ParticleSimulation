@@ -284,7 +284,7 @@ public:
 
             std::vector<std::vector<Particle *>> local_cellParticles(grid_size*grid_size); //TODO: podemos dividir isto corretamente pelas threads
 
-            #pragma omp for
+            #pragma omp for nowait
             for (size_t i = 0; i < particles.size(); i++)
             {
                 // Calculate cell index
