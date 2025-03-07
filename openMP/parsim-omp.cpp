@@ -248,6 +248,7 @@ public:
     
     void updateCellParticles()
     {
+        #pragma omp for
         for(int i = 0 ; i < cellParticles.size();i++){
 
             if(cells[i].change_flag){ // esta cell precisa de ser atualizada
@@ -256,14 +257,18 @@ public:
                 //std::cout << "cell flag" << std::endl;    
                 for(int k = 0 ; k<cellParticles[i].size();k++){
                     // encontrar todas as particulas que nao deviam estar nesta cell
-                    //1 -remover 2- meter na correta
-                    if (cellParticles[i][k]->cell_index!=i){
+                    //1 -remover 2- meter na 
+                    int cell_index = cellParticles[i][k]->cell_index;
+                    if (cell_index!=i){
 
                         //print "particula em cell errada"
                        // std::cout << "particula em cell errada" << std::endl;
-
-                        cellParticles[cellParticles[i][k]->cell_index].push_back(cellParticles[i][k]); // meter particula na cell correta
+                        omp_set_lock(&cells[cell_index].write_lock);
+                        cellParticles[cell_index].push_back(cellParticles[i][k]); // meter particula na cell correta
+                        omp_unset_lock(&cells[cell_index].write_lock);
+                        omp_set_lock(&cells[i].write_lock);
                         cellParticles[i].erase(it);
+                        omp_unset_lock(&cells[i].write_lock);
                     }
                     ++it;
                 }
@@ -304,7 +309,7 @@ public:
 
             
                 particles[i].cell_index = cell_index; // set particle cell index
-                // fazer assim é melhor do que fazer so com critical porque assim 
+
                 local_cellParticles[cell_index].push_back(&particles[i]);
                 
                 //o add particle tem la dentro locks
@@ -328,6 +333,8 @@ public:
 
     void updateForces()
     {
+
+        #pragma omp parallel for
         for (int i = 0; i < cellParticles.size(); i++)
         { // percorrer todas as cells
 
@@ -415,11 +422,16 @@ public:
 
     void updatePositionAndVelocity(double sidelen)
     {
-        for (size_t i = 0; i < particles.size(); i++)
+        #pragma omp parallel
         {
-            particles[i].applyForce(sidelen,grid_size,cells);
+            #pragma omp for
+            for (size_t i = 0; i < particles.size(); i++)
+            {
+                particles[i].applyForce(sidelen,grid_size,cells);
+            }
+            #pragma omp barrier
+            updateCellParticles();
         }
-        updateCellParticles();
     }
 
     void checkCollisions()
@@ -469,7 +481,9 @@ public:
         for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             // Calculate Cell center of mass
-            updateCOM();
+            updateCOM(); 
+
+
             // Calculate force for particles
             updateForces();
             // Update position and velocity
