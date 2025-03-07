@@ -476,7 +476,7 @@ int main(int argc, char *argv[])
         simulation.simulate(n_timesteps);
         exec_time += omp_get_wtime();
 
-        fprintf(stderr, "%.lfs\n", exec_time);
+        fprintf(stderr, "%.1lfs\n", exec_time);
         simulation.print_result();
 
         return 0;
