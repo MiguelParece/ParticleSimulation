@@ -437,6 +437,7 @@ public:
 
     void checkCollisions()
     {
+        #pragma omp for reduction(+:collisions)
         for (int i = 0; i < cellParticles.size(); i++)
         {   
             std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
@@ -490,10 +491,10 @@ public:
             updateForces();
             // Update position and velocity
             updatePositionAndVelocity(side_length);
-            
-            }
+            #pragma omp barrier
             // Check collisons
             checkCollisions();
+            }
             // std::cout << "t=" << i << std::endl;
             // for (size_t j = 0; j < particles.size(); j++)
             // {
