@@ -280,61 +280,62 @@ public:
 
     void updateCOM()
     {
+
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
         cells.assign(grid_size * grid_size, Cell{});
-        #pragma omp parallel
+        
+
+        //array de particulas local
+
+        std::vector<std::vector<Particle *>> local_cellParticles(grid_size*grid_size); //TODO: podemos dividir isto corretamente pelas threads
+
+        #pragma omp for nowait
+        for (size_t i = 0; i < particles.size(); i++)
         {
+            // Calculate cell index
+            int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
+            int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
 
-            //array de particulas local
-
-            std::vector<std::vector<Particle *>> local_cellParticles(grid_size*grid_size); //TODO: podemos dividir isto corretamente pelas threads
-
-            #pragma omp for nowait
-            for (size_t i = 0; i < particles.size(); i++)
-            {
-                // Calculate cell index
-                int cell_x = static_cast<int>(particles[i].x / (side_length / grid_size));
-                int cell_y = static_cast<int>(particles[i].y / (side_length / grid_size));
-
-                // Convert 2D cell index to 1D index
-                int cell_index = cell_y * grid_size + cell_x;
+            // Convert 2D cell index to 1D index
+            int cell_index = cell_y * grid_size + cell_x;
 
 
 
-                if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
-                    // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
-                    std::cout << "[PANIC2] Cell out of bounds" << std::endl;
-                    continue;
-                }
+            if (cell_x < 0 || cell_x >= grid_size || cell_y < 0 || cell_y >= grid_size) {
+                // std::cout << "cellx" << cell_x << " celly" << cell_y << std::endl;
+                std::cout << "[PANIC2] Cell out of bounds" << std::endl;
+                continue;
+            }
 
+        
+            particles[i].cell_index = cell_index; // set particle cell index
+
+            local_cellParticles[cell_index].push_back(&particles[i]);
             
-                particles[i].cell_index = cell_index; // set particle cell index
+            //o add particle tem la dentro locks
+            cells[cell_index].addParticle(&particles[i]);
+            cells[cell_index].x=cell_x;
+            cells[cell_index].y=cell_y;
+        }
 
-                local_cellParticles[cell_index].push_back(&particles[i]);
-                
-                //o add particle tem la dentro locks
-                cells[cell_index].addParticle(&particles[i]);
-                cells[cell_index].x=cell_x;
-                cells[cell_index].y=cell_y;
-            }
-
-            //juntar os cellParticles locais no principal
-            #pragma omp critical
-            {
-                for (size_t j = 0; j < grid_size * grid_size; j++) {
-                    if(!local_cellParticles[j].empty()){
-                    cellParticles[j].insert(cellParticles[j].end(), local_cellParticles[j].begin(), local_cellParticles[j].end());
-                    }
+        //juntar os cellParticles locais no principal
+        #pragma omp critical
+        {
+            for (size_t j = 0; j < grid_size * grid_size; j++) {
+                if(!local_cellParticles[j].empty()){
+                cellParticles[j].insert(cellParticles[j].end(), local_cellParticles[j].begin(), local_cellParticles[j].end());
                 }
             }
-
         }
+
+        #pragma omp barrier
+        
     }
 
     void updateForces()
     {
 
-        #pragma omp parallel for
+        #pragma omp for
         for (int i = 0; i < cellParticles.size(); i++)
         { // percorrer todas as cells
 
@@ -418,20 +419,20 @@ public:
                 }
             }
         }
+        #pragma omp barrier
     }
 
     void updatePositionAndVelocity(double sidelen)
     {
-        #pragma omp parallel
+        
+        #pragma omp for
+        for (size_t i = 0; i < particles.size(); i++)
         {
-            #pragma omp for
-            for (size_t i = 0; i < particles.size(); i++)
-            {
-                particles[i].applyForce(sidelen,grid_size,cells);
-            }
-            #pragma omp barrier
-            updateCellParticles();
+            particles[i].applyForce(sidelen,grid_size,cells);
         }
+        #pragma omp barrier
+        updateCellParticles();
+        
     }
 
     void checkCollisions()
@@ -481,13 +482,16 @@ public:
         for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
         {   
             // Calculate Cell center of mass
+            #pragma omp parallel
+            {
+
             updateCOM(); 
-
-
             // Calculate force for particles
             updateForces();
             // Update position and velocity
             updatePositionAndVelocity(side_length);
+            
+            }
             // Check collisons
             checkCollisions();
             // std::cout << "t=" << i << std::endl;
