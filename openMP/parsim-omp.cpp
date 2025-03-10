@@ -281,15 +281,20 @@ public:
     void updateCOM()
     {
 
+
+        #pragma omp barrier
+
+        #pragma omp single
+        {
         cellParticles.assign(grid_size * grid_size, std::vector<Particle *>{});
         cells.assign(grid_size * grid_size, Cell{});
-        
+        }
 
         //array de particulas local
 
         std::vector<std::vector<Particle *>> local_cellParticles(grid_size*grid_size); //TODO: podemos dividir isto corretamente pelas threads
 
-        #pragma omp for nowait
+        #pragma omp for
         for (size_t i = 0; i < particles.size(); i++)
         {
             // Calculate cell index
@@ -440,7 +445,6 @@ public:
         #pragma omp for reduction(+:collisions)
         for (int i = 0; i < cellParticles.size(); i++)
         {   
-            std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
             for (int j = 0; j < cellParticles[i].size(); j++)
             {
                 if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
@@ -452,20 +456,19 @@ public:
                         {
                             // if particles not in set, new collision detected
                             //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
-                            if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
-                                collisions++;
+                            cellParticles[i][j]->alive = false;
+                            cellParticles[i][k]->alive = false;
+                            collisions++;
+                            cellParticles[i][j]->m = 0;
+                            cellParticles[i][k]->m = 0;
 
-                            // add particles to set since new they have collided
-                            collisionSet.insert(cellParticles[i][j]);
-                            collisionSet.insert(cellParticles[i][k]);
+                            
+
+                           
+
                         }
                     }
                 }
-            }
-            for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
-            {
-                elem->alive = false;
-                elem->m = 0;
             }
         }
     }
@@ -480,27 +483,26 @@ public:
         //     {
         //         // std::cout << std::fixed << std::setprecision(3) << "Cell " << j << " x: " << cells[j].mx << " y: " << cells[j].my << " m: " << cells[j].m << std::endl;
         //     }
-        #pragma omp parallel
-        {
             for (long i = 0; i < n_time_steps; i++) // TODO main loop with the right steps
-            {   
-            // Calculate Cell center of mass
-
-                updateCOM(); 
-                // Calculate force for particles
-                updateForces();
-            // Update position and velocity
-                updatePositionAndVelocity(side_length);
-                #pragma omp barrier
-            // Check collisons
-                checkCollisions();
+            {
+            #pragma omp parallel
+                {   
+                    // Calculate Cell center of mass
+                    updateCOM(); 
+                  // Calculate force for particles
+                    updateForces();
+                     // Update position and velocity
+                    updatePositionAndVelocity(side_length);
+                    #pragma omp barrier
+                    // Check collisons
+                    checkCollisions();
+                }
             }
             // std::cout << "t=" << i << std::endl;
             // for (size_t j = 0; j < particles.size(); j++)
             // {
             //     std::cout << std::fixed << std::setprecision(3) << "Particle " << j << ": mass=" << particles[j].m << " x=" << particles[j].x << " y=" << particles[j].y << " vx=" << particles[j].vx << " vy=" << particles[j].vy << std::endl;
             // }
-        }
     }
 
     void print_result(){
