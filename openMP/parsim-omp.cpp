@@ -249,33 +249,37 @@ public:
     void updateCellParticles()
     {
         #pragma omp for
-        for(int i = 0 ; i < cellParticles.size();i++){
-
-            if(cells[i].change_flag){ // esta cell precisa de ser atualizada
-                auto it = cellParticles[i].begin();
-                //print "cell flag"
-                //std::cout << "cell flag" << std::endl;    
-                for(int k = 0 ; k<cellParticles[i].size();k++){
-                    // encontrar todas as particulas que nao deviam estar nesta cell
-                    //1 -remover 2- meter na 
+        for(int i = 0 ; i < cellParticles.size(); i++){
+            if(cells[i].change_flag){ 
+                // Collect particles that need to move
+                std::vector<std::pair<Particle*, int>> particlesToMove;
+                
+                for(int k = 0; k < cellParticles[i].size(); k++){
                     int cell_index = cellParticles[i][k]->cell_index;
-                    if (cell_index!=i){
-
-                        //print "particula em cell errada"
-                       // std::cout << "particula em cell errada" << std::endl;
-                        omp_set_lock(&cells[cell_index].write_lock);
-                        cellParticles[cell_index].push_back(cellParticles[i][k]); // meter particula na cell correta
-                        omp_unset_lock(&cells[cell_index].write_lock);
-                        omp_set_lock(&cells[i].write_lock);
-                        cellParticles[i].erase(it);
-                        omp_unset_lock(&cells[i].write_lock);
+                    if (cell_index != i){
+                        particlesToMove.push_back({cellParticles[i][k], cell_index});
                     }
-                    ++it;
                 }
-                cells[i].change_flag = false; // reset cell flag
+                
+                // Move particles to new cells
+                for(auto& pair : particlesToMove) {
+                    omp_set_lock(&cells[pair.second].write_lock);
+                    cellParticles[pair.second].push_back(pair.first);
+                    omp_unset_lock(&cells[pair.second].write_lock);
+                }
+                
+                // Remove moved particles from original cell
+                if(!particlesToMove.empty()) {
+                    omp_set_lock(&cells[i].write_lock);
+                    auto newEnd = std::remove_if(cellParticles[i].begin(), cellParticles[i].end(),
+                        [i](Particle* p) { return p->cell_index != i; });
+                    cellParticles[i].erase(newEnd, cellParticles[i].end());
+                    omp_unset_lock(&cells[i].write_lock);
+                }
+                
+                cells[i].change_flag = false;
             }
         }
-
     }   
 
     void updateCOM()
@@ -441,37 +445,38 @@ public:
     }
 
     void checkCollisions()
-    {
-        #pragma omp for reduction(+:collisions)
-        for (int i = 0; i < cellParticles.size(); i++)
-        {   
-            for (int j = 0; j < cellParticles[i].size(); j++)
-            {
-                if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
-                    for (int k = j + 1; k < cellParticles[i].size(); k++)
+{
+    #pragma omp for reduction(+:collisions)
+    for (int i = 0; i < cellParticles.size(); i++)
+    {   
+        std::unordered_set<Particle *> collisionSet;
+        for (int j = 0; j < cellParticles[i].size(); j++)
+        {
+            if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
+                for (int k = j + 1; k < cellParticles[i].size(); k++)
+                {
+                    // if both particles are alive, check if distance between them is smaller than EPSILON
+                    if (cellParticles[i][k]->alive == true &&
+                        cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON)
                     {
-                        // if both particles are alive, check if distance between them is smaller than EPSILON
-                        if (cellParticles[i][k]->alive == true &&
-                            cellParticles[i][j]->getDistance(cellParticles[i][k]) < EPSILON)
-                        {
-                            // if particles not in set, new collision detected
-                            //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
-                            cellParticles[i][j]->alive = false;
-                            cellParticles[i][k]->alive = false;
+                        // if particles not in set, new collision detected
+                        //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
+                        if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
                             collisions++;
-                            cellParticles[i][j]->m = 0;
-                            cellParticles[i][k]->m = 0;
-
-                            
-
-                           
-
-                        }
+                        collisionSet.insert(cellParticles[i][j]);
+                        collisionSet.insert(cellParticles[i][k]);
                     }
                 }
             }
         }
+        
+        for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
+        {
+            elem->alive = false;
+            elem->m = 0;
+        }
     }
+}
 
     void simulate(long n_time_steps)
     {
