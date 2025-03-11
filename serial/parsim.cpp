@@ -389,7 +389,7 @@ public:
     {
         for (int i = 0; i < cellParticles.size(); i++)
         {   
-            //std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
+            std::unordered_set<Particle *> collisionSet; //set used to temporarily store collided particles in a cell
             for (int j = 0; j < cellParticles[i].size(); j++)
             {
                 if (cellParticles[i][j]->alive == true) { // Only check particles that are alive
@@ -401,25 +401,21 @@ public:
                         {
                             // if particles not in set, new collision detected
                             //std::cout << std::fixed << std::setprecision(6) << "Collision of dist: " << cellParticles[i][j]->getDistance(cellParticles[i][k]) << std::endl;
-                            //if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
-                            collisions++;
-                            cellParticles[i][j]->alive = false;
-                            cellParticles[i][j]->m = 0;
-                            cellParticles[i][k]->alive = false;
-                            cellParticles[i][k]->m = 0;
+                            if (collisionSet.count(cellParticles[i][j]) == 0 && collisionSet.count(cellParticles[i][k]) == 0)
+                                collisions++;
 
                             // add particles to set since new they have collided
-                            //collisionSet.insert(cellParticles[i][j]);
-                            //collisionSet.insert(cellParticles[i][k]);
+                            collisionSet.insert(cellParticles[i][j]);
+                            collisionSet.insert(cellParticles[i][k]);
                         }
                     }
                 }
             }
-           // for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
-           // {
-         //       elem->alive = false;
-         //       elem->m = 0;
-          //  }
+           for (const auto &elem : collisionSet) // set all particles inside collisionSet as "dead"
+           {
+               elem->alive = false;
+               elem->m = 0;
+           }
         }
     }
 
