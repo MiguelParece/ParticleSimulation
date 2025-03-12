@@ -10,7 +10,6 @@
 #include <algorithm>
 #include <omp.h>
 
-#define NUM_THREADS 6
 #define G 6.67408e-11
 #define EPSILON2 (0.005 * 0.005)
 #define EPSILON 0.005
@@ -531,8 +530,6 @@ int main(int argc, char *argv[])
         long long n_particles = std::stoll(argv[4]);
         long n_timesteps = std::stol(argv[5]);
         double exec_time;
-      
-        omp_set_num_threads(NUM_THREADS);
 
         ParticleSimulation simulation(seed, side_length, grid_size, n_particles);
         
