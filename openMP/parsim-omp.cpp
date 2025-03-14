@@ -336,7 +336,6 @@ public:
             }
         }
 
-        #pragma omp barrier
         
     }
 
@@ -427,7 +426,6 @@ public:
                 }
             }
         }
-        #pragma omp barrier
     }
 
     void updatePositionAndVelocity(double sidelen)
@@ -493,8 +491,10 @@ public:
                 {   
                     // Calculate Cell center of mass
                     updateCOM(); 
-                  // Calculate force for particles
+                    #pragma omp barrier
+                    // Calculate force for particles
                     updateForces();
+                    #pragma omp barrier
                      // Update position and velocity
                     updatePositionAndVelocity(side_length);
                     #pragma omp barrier
@@ -537,7 +537,7 @@ int main(int argc, char *argv[])
         simulation.simulate(n_timesteps);
         exec_time += omp_get_wtime();
 
-        fprintf(stderr, "%.lfs\n", exec_time);
+        fprintf(stderr, "%.1lfs\n", exec_time);
         simulation.print_result();
 
         return 0;
