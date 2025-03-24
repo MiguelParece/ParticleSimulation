@@ -3,3 +3,4 @@ parsim-omp
 .vscode/
 output
 *.txt
+/labs
