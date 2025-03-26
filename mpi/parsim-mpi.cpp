@@ -69,7 +69,8 @@ private:
         vy += ay * DELTAT;
     }
 
-public:
+    public:
+    int id;  // Unique identifier for each particle
     double x, y;   // Position
     double vx, vy; // Velocity
     double m;      // Mass
@@ -78,10 +79,11 @@ public:
     int cell_index; // which cell it belongs to
     int proc_owner; // Process that owns this particle
     
-    Particle() : x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true), proc_owner(-1) {}
+    Particle() : id(-1), x(0), y(0), vx(0), vy(0), m(0), fx(0), fy(0), alive(true), proc_owner(-1) {}
 
     // Conversion from MPI transfer structure
-    Particle(const ParticleData& data) : 
+    Particle(const ParticleData& data, int particle_id = -1) : 
+        id(particle_id),
         x(data.x), y(data.y), 
         vx(data.vx), vy(data.vy), 
         m(data.m), fx(0), fy(0), 
@@ -327,6 +329,7 @@ public:
 
     void init_particles() {
         for (size_t i = 0; i < particles.size(); i++) {
+            particles[i].id = i;  // Assign unique ID
             particles[i].x = rng.getRandom01() * side_length;
             particles[i].y = rng.getRandom01() * side_length;
             particles[i].vx = (rng.getRandom01() - 0.5) * side_length / grid_size / 5.0;
@@ -848,6 +851,61 @@ public:
         // Collect total collisions from all processes
         MPI_Reduce(&local_collisions, &global_collisions, 1, MPI_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
     }
+
+    std::vector<Particle> gatherAllParticles() {
+        // First, count local particles
+        int local_particle_count = particles.size();
+        
+        // Create arrays to store counts and displacements for each process
+        std::vector<int> particle_counts(num_procs);
+        std::vector<int> particle_displs(num_procs, 0);
+        
+        // Gather the number of particles from each process
+        MPI_Allgather(&local_particle_count, 1, MPI_INT, 
+                      particle_counts.data(), 1, MPI_INT, 
+                      MPI_COMM_WORLD);
+        
+        // Calculate displacements and total particle count
+        int total_particles = 0;
+        for (int i = 0; i < num_procs; i++) {
+            particle_displs[i] = total_particles;
+            total_particles += particle_counts[i];
+        }
+        
+        // Prepare a vector to receive all particles
+        std::vector<ParticleData> all_particle_data(total_particles);
+        
+        // Convert local particles to ParticleData
+        std::vector<ParticleData> local_particle_data;
+        for (const auto& p : particles) {
+            local_particle_data.push_back(p.toParticleData());
+        }
+        
+        // Gather all particles from all processes
+        MPI_Gatherv(
+            local_particle_data.data(), local_particle_count, mpi_particle_type,
+            all_particle_data.data(), particle_counts.data(), particle_displs.data(), 
+            mpi_particle_type, 0, MPI_COMM_WORLD
+        );
+        
+        // Convert back to Particles on root process
+        std::vector<Particle> all_particles;
+        if (rank == 0) {
+            // Create a temporary vector with the original particle order
+            std::vector<Particle> ordered_particles;
+            for (const auto& p_data : all_particle_data) {
+                all_particles.push_back(Particle(p_data));
+            }
+            
+            // Sort particles based on their cell index to maintain original order
+            std::sort(all_particles.begin(), all_particles.end(), 
+                [](const Particle& a, const Particle& b) {
+                    return a.cell_index < b.cell_index;
+                });
+        }
+        
+        return all_particles;
+    }
     
     Particle getParticle(int index) const {
         if (rank == 0) {
@@ -953,23 +1011,26 @@ int main(int argc, char *argv[]) {
         
         // Output results
         if (rank == 0) {
-            // Print all particles
-            for (int i = 0; i < n_part; i++) {
-                Particle p = simulation.getParticle(i);
+            // Get all particles from all processes
+            std::vector<Particle> all_particles = simulation.gatherAllParticles();
+            
+            std::sort(all_particles.begin(), all_particles.end(), 
+            [](const Particle& a, const Particle& b) { return a.id < b.id; });
+
+            // Print all particle positions
+            std::cout << "Final particle positions:" << std::endl;
+            for (const auto& p : all_particles) {
                 std::cout << std::fixed << std::setprecision(3) << p.x << " " << p.y << std::endl;
             }
-        
-            // Get particle 0 specifically
-            Particle p0 = simulation.getParticle(0);
-            
-            // Print particle 0 coordinates
-            std::cout << std::fixed << std::setprecision(3) << p0.x << " " << p0.y << std::endl;
             
             // Print collision count
             std::cout << simulation.getCollisionCount() << std::endl;
             
             // Print execution time to stderr
             std::cerr << std::fixed << std::setprecision(1) << exec_time << "s" << std::endl;
+        } else {
+            // Non-root processes just gather their particles
+            simulation.gatherAllParticles();
         }
     }  // Simulation object destructor called here
 
