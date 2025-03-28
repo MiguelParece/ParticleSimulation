@@ -249,7 +249,7 @@ private:
     void initMPITypes() {
         // Create MPI datatype for ParticleData
         MPI_Datatype types[8] = {MPI_INT, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_C_BOOL, MPI_INT};
-        int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1};
+        int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1, 1}; // Fixed: Added missing value for the last field
         MPI_Aint offsets[8];
         
         offsets[0] = offsetof(ParticleData, id);
@@ -263,7 +263,7 @@ private:
         
         MPI_Type_create_struct(8, blocklengths, offsets, types, &mpi_particle_type);
         MPI_Type_commit(&mpi_particle_type);
-
+    
         // Create MPI datatype for CellCOMData
         MPI_Datatype com_types[5] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_INT, MPI_INT};
         int com_blocklengths[5] = {1, 1, 1, 1, 1};
@@ -437,21 +437,22 @@ public:
         std::vector<std::vector<ParticleData>> particles_to_send(num_procs);
         
         // Identify particles to send to other processes
-        std::vector<Particle*> particles_to_remove;
-        for (auto& p : particles) {
-            if (p.cell_index == -1 && p.proc_owner != rank) {
-                particles_to_send[p.proc_owner].push_back(p.toParticleData());
-                particles_to_remove.push_back(&p);
+        std::vector<int> particles_to_remove_indices;
+        for (size_t i = 0; i < particles.size(); i++) {
+            if (particles[i].cell_index == -1 && particles[i].proc_owner != rank && 
+                particles[i].proc_owner >= 0 && particles[i].proc_owner < num_procs) {
+                particles_to_send[particles[i].proc_owner].push_back(particles[i].toParticleData());
+                particles_to_remove_indices.push_back(i);
             }
         }
         
         // Exchange particle counts
-        std::vector<int> send_counts(num_procs);
+        std::vector<int> send_counts(num_procs, 0);
         for (int i = 0; i < num_procs; i++) {
             send_counts[i] = particles_to_send[i].size();
         }
         
-        std::vector<int> recv_counts(num_procs);
+        std::vector<int> recv_counts(num_procs, 0);
         MPI_Alltoall(send_counts.data(), 1, MPI_INT, recv_counts.data(), 1, MPI_INT, MPI_COMM_WORLD);
         
         // Exchange particles
@@ -483,15 +484,13 @@ public:
             MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
         }
         
-        // Remove particles that were sent to other processes
-        particles.erase(
-            std::remove_if(particles.begin(), particles.end(), 
-                [&particles_to_remove](const Particle& p) {
-                    return std::find(particles_to_remove.begin(), particles_to_remove.end(), &p) != particles_to_remove.end();
-                }
-            ),
-            particles.end()
-        );
+        // Remove particles that were sent to other processes - use reverse order to prevent invalidation
+        std::sort(particles_to_remove_indices.begin(), particles_to_remove_indices.end(), std::greater<int>());
+        for (int idx : particles_to_remove_indices) {
+            if (idx >= 0 && idx < static_cast<int>(particles.size())) {
+                particles.erase(particles.begin() + idx);
+            }
+        }
         
         // Add received particles
         for (const auto& p_data : received_particles) {
@@ -500,10 +499,13 @@ public:
             // Update cell index for new domain
             int cell_y = static_cast<int>(new_particle.y / (side_length / grid_size));
             int cell_x = static_cast<int>(new_particle.x / (side_length / grid_size));
-            new_particle.cell_index = (cell_y - my_row_start) * grid_size + cell_x;
-            new_particle.proc_owner = rank;
             
-            particles.push_back(new_particle);
+            // Only add if the particle belongs to this process's domain
+            if (cell_y >= my_row_start && cell_y < my_row_end) {
+                new_particle.cell_index = (cell_y - my_row_start) * grid_size + cell_x;
+                new_particle.proc_owner = rank;
+                particles.push_back(new_particle);
+            }
         }
     }
 
@@ -551,160 +553,146 @@ public:
         }
     
         // Collect COM data for top and bottom rows
-        std::vector<CellCOMData> top_row_data(grid_size), bottom_row_data(grid_size);
+        std::vector<CellCOMData> top_row_data(grid_size, {0}); // Zero-initialize
+        std::vector<CellCOMData> bottom_row_data(grid_size, {0}); // Zero-initialize
         
         // Prepare data for boundary exchange
-        try {
-            // If not the first process, prepare top row to send to previous process
-            if (rank > 0) {
-                for (int x = 0; x < grid_size; x++) {
-                    int cell_index = x; // First row in my domain
-                    if (cell_index >= 0 && cell_index < static_cast<int>(cells.size())) {
-                        top_row_data[x].mx = cells[cell_index].mx;
-                        top_row_data[x].my = cells[cell_index].my;
-                        top_row_data[x].m = cells[cell_index].m;
-                        top_row_data[x].x = cells[cell_index].x;
-                        top_row_data[x].y = cells[cell_index].y;
-                    }
+        // If not the first process, prepare top row to send to previous process
+        if (rank > 0) {
+            for (int x = 0; x < grid_size; x++) {
+                int cell_index = x; // First row in my domain
+                if (cell_index >= 0 && cell_index < static_cast<int>(cells.size())) {
+                    top_row_data[x].mx = cells[cell_index].mx;
+                    top_row_data[x].my = cells[cell_index].my;
+                    top_row_data[x].m = cells[cell_index].m;
+                    top_row_data[x].x = cells[cell_index].x;
+                    top_row_data[x].y = cells[cell_index].y;
                 }
             }
-            
-            // If not the last process, prepare bottom row to send to next process
-            if (rank < num_procs - 1) {
-                int last_row = (my_row_end - my_row_start - 1) * grid_size;
-                for (int x = 0; x < grid_size; x++) {
-                    int cell_index = last_row + x;
-                    if (cell_index >= 0 && cell_index < static_cast<int>(cells.size())) {
-                        bottom_row_data[x].mx = cells[cell_index].mx;
-                        bottom_row_data[x].my = cells[cell_index].my;
-                        bottom_row_data[x].m = cells[cell_index].m;
-                        bottom_row_data[x].x = cells[cell_index].x;
-                        bottom_row_data[x].y = cells[cell_index].y;
-                    }
+        }
+        
+        // If not the last process, prepare bottom row to send to next process
+        if (rank < num_procs - 1 && (my_row_end - my_row_start) > 0) {
+            int last_row = (my_row_end - my_row_start - 1) * grid_size;
+            for (int x = 0; x < grid_size; x++) {
+                int cell_index = last_row + x;
+                if (cell_index >= 0 && cell_index < static_cast<int>(cells.size())) {
+                    bottom_row_data[x].mx = cells[cell_index].mx;
+                    bottom_row_data[x].my = cells[cell_index].my;
+                    bottom_row_data[x].m = cells[cell_index].m;
+                    bottom_row_data[x].x = cells[cell_index].x;
+                    bottom_row_data[x].y = cells[cell_index].y;
                 }
             }
-        } catch (const std::exception& e) {
-            std::cerr << "Error in data preparation: " << e.what() << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, 1);
         }
     
-        // Safer communication with explicit synchronization
-        std::vector<MPI_Request> requests;
-        std::vector<MPI_Status> statuses;
-        
         // Receive buffers
-        std::vector<CellCOMData> ghost_bottom_row(grid_size), ghost_top_row(grid_size);
+        std::vector<CellCOMData> ghost_bottom_row(grid_size, {0}); // Zero-initialize
+        std::vector<CellCOMData> ghost_top_row(grid_size, {0}); // Zero-initialize
         
-        try {
-            // Send/Receive operations with explicit error checking
-            if (rank > 0) {
-                MPI_Request send_req, recv_req;
-                MPI_Status send_status, recv_status;
-                
-                // Non-blocking send to previous process
-                int send_err = MPI_Isend(top_row_data.data(), grid_size, mpi_cell_com_type, 
-                                         rank - 1, 0, MPI_COMM_WORLD, &send_req);
-                
-                // Non-blocking receive from previous process
-                int recv_err = MPI_Irecv(ghost_bottom_row.data(), grid_size, mpi_cell_com_type, 
-                                         rank - 1, 1, MPI_COMM_WORLD, &recv_req);
-                
-                if (send_err != MPI_SUCCESS || recv_err != MPI_SUCCESS) {
-                    std::cerr << "MPI communication error at rank " << rank << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, 1);
-                }
-                
-                // Wait for both send and receive
-                MPI_Wait(&send_req, &send_status);
-                MPI_Wait(&recv_req, &recv_status);
+        // Send/Receive operations with explicit error checking
+        if (rank > 0) {
+            MPI_Request send_req, recv_req;
+            MPI_Status send_status, recv_status;
+            
+            // Non-blocking send to previous process
+            int send_err = MPI_Isend(top_row_data.data(), grid_size, mpi_cell_com_type, 
+                                     rank - 1, 0, MPI_COMM_WORLD, &send_req);
+            
+            // Non-blocking receive from previous process
+            int recv_err = MPI_Irecv(ghost_bottom_row.data(), grid_size, mpi_cell_com_type, 
+                                     rank - 1, 1, MPI_COMM_WORLD, &recv_req);
+            
+            if (send_err != MPI_SUCCESS || recv_err != MPI_SUCCESS) {
+                std::cerr << "MPI communication error at rank " << rank << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, 1);
             }
             
-            // Repeat for bottom row communication with next process
-            if (rank < num_procs - 1) {
-                MPI_Request send_req, recv_req;
-                MPI_Status send_status, recv_status;
-                
-                // Non-blocking send to next process
-                int send_err = MPI_Isend(bottom_row_data.data(), grid_size, mpi_cell_com_type, 
-                                         rank + 1, 1, MPI_COMM_WORLD, &send_req);
-                
-                // Non-blocking receive from next process
-                int recv_err = MPI_Irecv(ghost_top_row.data(), grid_size, mpi_cell_com_type, 
-                                         rank + 1, 0, MPI_COMM_WORLD, &recv_req);
-                
-                if (send_err != MPI_SUCCESS || recv_err != MPI_SUCCESS) {
-                    std::cerr << "MPI communication error at rank " << rank << std::endl;
-                    MPI_Abort(MPI_COMM_WORLD, 1);
-                }
-                
-                // Wait for both send and receive
-                MPI_Wait(&send_req, &send_status);
-                MPI_Wait(&recv_req, &recv_status);
+            // Wait for both send and receive
+            MPI_Wait(&send_req, &send_status);
+            MPI_Wait(&recv_req, &recv_status);
+        }
+        
+        // Repeat for bottom row communication with next process
+        if (rank < num_procs - 1) {
+            MPI_Request send_req, recv_req;
+            MPI_Status send_status, recv_status;
+            
+            // Non-blocking send to next process
+            int send_err = MPI_Isend(bottom_row_data.data(), grid_size, mpi_cell_com_type, 
+                                     rank + 1, 1, MPI_COMM_WORLD, &send_req);
+            
+            // Non-blocking receive from next process
+            int recv_err = MPI_Irecv(ghost_top_row.data(), grid_size, mpi_cell_com_type, 
+                                     rank + 1, 0, MPI_COMM_WORLD, &recv_req);
+            
+            if (send_err != MPI_SUCCESS || recv_err != MPI_SUCCESS) {
+                std::cerr << "MPI communication error at rank " << rank << std::endl;
+                MPI_Abort(MPI_COMM_WORLD, 1);
             }
-        } catch (const std::exception& e) {
-            std::cerr << "Communication error at rank " << rank << ": " << e.what() << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, 1);
+            
+            // Wait for both send and receive
+            MPI_Wait(&send_req, &send_status);
+            MPI_Wait(&recv_req, &recv_status);
         }
     
         // Add ghost cells to local grid with additional safety checks
-        try {
-            // For bottom ghost row (coming from previous process)
-            if (rank > 0) {
-                for (int x = 0; x < grid_size; x++) {
-                    if (x < static_cast<int>(ghost_bottom_row.size())) {
-                        Cell ghost_cell;
-                        ghost_cell.mx = ghost_bottom_row[x].mx;
-                        ghost_cell.my = ghost_bottom_row[x].my - side_length;
-                        ghost_cell.m = ghost_bottom_row[x].m;
-                        ghost_cell.x = ghost_bottom_row[x].x;
-                        ghost_cell.y = ghost_bottom_row[x].y;
-                        ghost_cell.is_ghost = true;
-                        
-                        cells.push_back(ghost_cell);
-                    }
-                }
+        // For bottom ghost row (coming from previous process)
+        if (rank > 0) {
+            for (int x = 0; x < grid_size; x++) {
+                Cell ghost_cell;
+                ghost_cell.mx = ghost_bottom_row[x].mx;
+                ghost_cell.my = ghost_bottom_row[x].my - side_length;
+                ghost_cell.m = ghost_bottom_row[x].m;
+                ghost_cell.x = ghost_bottom_row[x].x;
+                ghost_cell.y = ghost_bottom_row[x].y;
+                ghost_cell.is_ghost = true;
+                
+                cells.push_back(ghost_cell);
             }
-            
-            // For top ghost row (coming from next process)
-            if (rank < num_procs - 1) {
-                for (int x = 0; x < grid_size; x++) {
-                    if (x < static_cast<int>(ghost_top_row.size())) {
-                        Cell ghost_cell;
-                        ghost_cell.mx = ghost_top_row[x].mx;
-                        ghost_cell.my = ghost_top_row[x].my + side_length;
-                        ghost_cell.m = ghost_top_row[x].m;
-                        ghost_cell.x = ghost_top_row[x].x;
-                        ghost_cell.y = ghost_top_row[x].y;
-                        ghost_cell.is_ghost = true;
-                        
-                        cells.push_back(ghost_cell);
-                    }
-                }
+        }
+        
+        // For top ghost row (coming from next process)
+        if (rank < num_procs - 1) {
+            for (int x = 0; x < grid_size; x++) {
+                Cell ghost_cell;
+                ghost_cell.mx = ghost_top_row[x].mx;
+                ghost_cell.my = ghost_top_row[x].my + side_length;
+                ghost_cell.m = ghost_top_row[x].m;
+                ghost_cell.x = ghost_top_row[x].x;
+                ghost_cell.y = ghost_top_row[x].y;
+                ghost_cell.is_ghost = true;
+                
+                cells.push_back(ghost_cell);
             }
-        } catch (const std::exception& e) {
-            std::cerr << "Ghost cell addition error at rank " << rank << ": " << e.what() << std::endl;
-            MPI_Abort(MPI_COMM_WORLD, 1);
         }
     }
 
     void updateForces() {
         #pragma omp parallel for
         for (int i = 0; i < (my_row_end - my_row_start) * grid_size; i++) {
+            if (i >= static_cast<int>(cells.size()) || i >= static_cast<int>(cellParticles.size())) {
+                continue; // Skip if cell index is out of bounds
+            }
+            
             std::vector<Cell> temp_cells;
             temp_cells.reserve(8);
-
+    
             int cell_x = cells[i].x;
             int cell_y = cells[i].y;
-
+    
             // Calculate neighboring cells
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dy = -1; dy <= 1; dy++) {
                     if (dx == 0 && dy == 0) continue; // Skip the center cell
-
+    
                     int neighbor_x = (cell_x + dx + grid_size) % grid_size;
                     int neighbor_y = cell_y + dy;
                     
                     Cell temp_cell;
+                    temp_cell.mx = 0.0;
+                    temp_cell.my = 0.0;
+                    temp_cell.m = 0.0;
                     
                     // Handle wrap-around for x
                     if (neighbor_x < 0) temp_cell.mx -= side_length;
@@ -716,7 +704,7 @@ public:
                         if (rank > 0) {
                             // Look in ghost cells
                             int ghost_index = (my_row_end - my_row_start) * grid_size + neighbor_x;
-                            if (ghost_index < cells.size()) {
+                            if (ghost_index >= 0 && ghost_index < static_cast<int>(cells.size())) {
                                 temp_cell.mx = cells[ghost_index].mx;
                                 temp_cell.my = cells[ghost_index].my;
                                 temp_cell.m = cells[ghost_index].m;
@@ -736,9 +724,9 @@ public:
                     } else if (neighbor_y >= my_row_end) {
                         // Use ghost cells from next process or wrap around
                         if (rank < num_procs - 1) {
-                            // Look in ghost cells
-                            int ghost_offset = (my_row_end - my_row_start) * grid_size + grid_size + neighbor_x;
-                            if (ghost_offset < cells.size()) {
+                            // Look in ghost cells - Fix the offset calculation
+                            int ghost_offset = (my_row_end - my_row_start) * grid_size + neighbor_x - my_row_start;
+                            if (ghost_offset >= 0 && ghost_offset < static_cast<int>(cells.size())) {
                                 temp_cell.mx = cells[ghost_offset].mx;
                                 temp_cell.my = cells[ghost_offset].my;
                                 temp_cell.m = cells[ghost_offset].m;
@@ -767,27 +755,30 @@ public:
                     }
                 }
             }
-
+    
             // Calculate forces between particles in the same cell
-            #pragma omp parallel for
-            for (size_t j = 0; j < cellParticles[i].size(); j++) {
-                for (size_t k = j + 1; k < cellParticles[i].size(); k++) {
-                    if (!cellParticles[i][j]->alive || !cellParticles[i][k]->alive)
+            if (i < static_cast<int>(cellParticles.size())) {
+                for (size_t j = 0; j < cellParticles[i].size(); j++) {
+                    if (!cellParticles[i][j] || !cellParticles[i][j]->alive)
                         continue;
                         
-                    cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                    for (size_t k = j + 1; k < cellParticles[i].size(); k++) {
+                        if (!cellParticles[i][k] || !cellParticles[i][k]->alive)
+                            continue;
+                            
+                        cellParticles[i][j]->calculateForceBetweenParticles(cellParticles[i][k]);
+                    }
                 }
-            }
-
-            // Calculate forces with neighboring cells
-            #pragma omp parallel for
-            for (size_t j = 0; j < cellParticles[i].size(); j++) {
-                if (!cellParticles[i][j]->alive)
-                    continue;
-                    
-                for (const auto& neighbor_cell : temp_cells) {
-                    if (neighbor_cell.m > 0) {
-                        cellParticles[i][j]->calculateForceWithCell(&neighbor_cell);
+    
+                // Calculate forces with neighboring cells
+                for (size_t j = 0; j < cellParticles[i].size(); j++) {
+                    if (!cellParticles[i][j] || !cellParticles[i][j]->alive)
+                        continue;
+                        
+                    for (const auto& neighbor_cell : temp_cells) {
+                        if (neighbor_cell.m > 0) {
+                            cellParticles[i][j]->calculateForceWithCell(&neighbor_cell);
+                        }
                     }
                 }
             }
@@ -860,7 +851,7 @@ public:
         int local_particle_count = particles.size();
         
         // Create arrays to store counts and displacements for each process
-        std::vector<int> particle_counts(num_procs);
+        std::vector<int> particle_counts(num_procs, 0);
         std::vector<int> particle_displs(num_procs, 0);
         
         // Gather the number of particles from each process
@@ -875,35 +866,39 @@ public:
             total_particles += particle_counts[i];
         }
         
-        // Prepare a vector to receive all particles
-        std::vector<ParticleData> all_particle_data(total_particles);
+        // Convert local particles to ParticleData for transmission
+        std::vector<ParticleData> local_particle_data(local_particle_count);
+        for (int i = 0; i < local_particle_count; i++) {
+            local_particle_data[i] = particles[i].toParticleData();
+        }
         
-        // Convert local particles to ParticleData
-        std::vector<ParticleData> local_particle_data;
-        for (const auto& p : particles) {
-            local_particle_data.push_back(p.toParticleData());
+        // Prepare vectors only on root process to save memory
+        std::vector<ParticleData> all_particle_data;
+        std::vector<Particle> all_particles;
+        
+        if (rank == 0) {
+            all_particle_data.resize(total_particles);
         }
         
         // Gather all particles from all processes
         MPI_Gatherv(
             local_particle_data.data(), local_particle_count, mpi_particle_type,
-            all_particle_data.data(), particle_counts.data(), particle_displs.data(), 
+            rank == 0 ? all_particle_data.data() : nullptr, 
+            particle_counts.data(), particle_displs.data(), 
             mpi_particle_type, 0, MPI_COMM_WORLD
         );
         
         // Convert back to Particles on root process
-        std::vector<Particle> all_particles;
         if (rank == 0) {
-            // Create a temporary vector with the original particle order
-            std::vector<Particle> ordered_particles;
+            all_particles.reserve(total_particles);
             for (const auto& p_data : all_particle_data) {
                 all_particles.push_back(Particle(p_data));
             }
             
-            // Sort particles based on their cell index to maintain original order
+            // Sort particles by ID to maintain original order
             std::sort(all_particles.begin(), all_particles.end(), 
                 [](const Particle& a, const Particle& b) {
-                    return a.cell_index < b.cell_index;
+                    return a.id < b.id;
                 });
         }
         
@@ -1017,13 +1012,28 @@ int main(int argc, char *argv[]) {
             // Get all particles from all processes
             std::vector<Particle> all_particles = simulation.gatherAllParticles();
             
+            // Sort by ID
             std::sort(all_particles.begin(), all_particles.end(), 
-            [](const Particle& a, const Particle& b) { return a.id < b.id; });
+                [](const Particle& a, const Particle& b) { return a.id < b.id; });
 
-            // Print all particle positions
-            std::cout << "Final particle positions:" << std::endl;
+            // Find particle 0 if it exists
+            Particle particle0;
+            bool found_particle0 = false;
+            
             for (const auto& p : all_particles) {
-                std::cout << std::fixed << std::setprecision(3) << "P" << p.id << " " << p.x << " " << p.y << std::endl;
+                if (p.id == 0) {
+                    particle0 = p;
+                    found_particle0 = true;
+                    break;
+                }
+            }
+            
+            // Print particle 0 position and collision count according to project requirements
+            if (found_particle0) {
+                std::cout << std::fixed << std::setprecision(3) 
+                          << particle0.x << " " << particle0.y << std::endl;
+            } else {
+                std::cout << "0.000 0.000" << std::endl; // Default if particle 0 not found
             }
             
             // Print collision count
