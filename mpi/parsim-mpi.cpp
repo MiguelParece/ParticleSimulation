@@ -18,6 +18,7 @@
 
 // Structure for MPI transfer of particles
 struct ParticleData {
+    int id;         // Particle ID
     double x, y;   // Position
     double vx, vy; // Velocity
     double m;      // Mass
@@ -83,7 +84,7 @@ private:
 
     // Conversion from MPI transfer structure
     Particle(const ParticleData& data, int particle_id = -1) : 
-        id(particle_id),
+        id(data.id),
         x(data.x), y(data.y), 
         vx(data.vx), vy(data.vy), 
         m(data.m), fx(0), fy(0), 
@@ -93,6 +94,7 @@ private:
     // Convert to MPI transfer structure
     ParticleData toParticleData() const {
         ParticleData data;
+        data.id = id;
         data.x = x;
         data.y = y;
         data.vx = vx;
@@ -246,19 +248,20 @@ private:
 
     void initMPITypes() {
         // Create MPI datatype for ParticleData
-        MPI_Datatype types[7] = {MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_C_BOOL, MPI_INT};
-        int blocklengths[7] = {1, 1, 1, 1, 1, 1, 1};
-        MPI_Aint offsets[7];
+        MPI_Datatype types[8] = {MPI_INT, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_DOUBLE, MPI_C_BOOL, MPI_INT};
+        int blocklengths[8] = {1, 1, 1, 1, 1, 1, 1};
+        MPI_Aint offsets[8];
         
-        offsets[0] = offsetof(ParticleData, x);
-        offsets[1] = offsetof(ParticleData, y);
-        offsets[2] = offsetof(ParticleData, vx);
-        offsets[3] = offsetof(ParticleData, vy);
-        offsets[4] = offsetof(ParticleData, m);
-        offsets[5] = offsetof(ParticleData, alive);
-        offsets[6] = offsetof(ParticleData, cell_index);
+        offsets[0] = offsetof(ParticleData, id);
+        offsets[1] = offsetof(ParticleData, x);
+        offsets[2] = offsetof(ParticleData, y);
+        offsets[3] = offsetof(ParticleData, vx);
+        offsets[4] = offsetof(ParticleData, vy);
+        offsets[5] = offsetof(ParticleData, m);
+        offsets[6] = offsetof(ParticleData, alive);
+        offsets[7] = offsetof(ParticleData, cell_index);
         
-        MPI_Type_create_struct(7, blocklengths, offsets, types, &mpi_particle_type);
+        MPI_Type_create_struct(8, blocklengths, offsets, types, &mpi_particle_type);
         MPI_Type_commit(&mpi_particle_type);
 
         // Create MPI datatype for CellCOMData
@@ -1020,7 +1023,7 @@ int main(int argc, char *argv[]) {
             // Print all particle positions
             std::cout << "Final particle positions:" << std::endl;
             for (const auto& p : all_particles) {
-                std::cout << std::fixed << std::setprecision(3) << p.x << " " << p.y << std::endl;
+                std::cout << std::fixed << std::setprecision(3) << "P" << p.id << " " << p.x << " " << p.y << std::endl;
             }
             
             // Print collision count
