@@ -1,5 +1,6 @@
 parsim
 parsim-omp
+parsim-mpi
 .vscode/
 output
 *.txt
