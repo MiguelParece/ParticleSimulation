@@ -944,10 +944,12 @@ public:
                     double dist_squared = dx * dx + dy * dy;
 
                     if (dist_squared <= EPSILON2)
-                    {
+                    {   
+                        if (valid_particles[j]->alive == true && valid_particles[k]->alive == true) {
+                            local_collisions++;
+                        }
                         valid_particles[j]->alive = false;
                         valid_particles[k]->alive = false;
-                        local_collisions++;
                     }
                 }
             }
