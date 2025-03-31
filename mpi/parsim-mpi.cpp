@@ -16,7 +16,7 @@
 #define EPSILON 0.005
 #define DELTAT 0.1
 
-#define DEBUG_MPI 0 
+#define DEBUG_MPI 0
 
 #if DEBUG_MPI
 #define DEBUG_PRINT(rank, msg, ...)                                                         \
@@ -676,6 +676,10 @@ public:
         std::vector<CellCOMData> bottom_row_data(grid_size, {0});  
         std::vector<CellCOMData> ghost_bottom_row(grid_size, {0}); 
         std::vector<CellCOMData> ghost_top_row(grid_size, {0});   
+        std::vector<CellCOMData> wrap_top_row(grid_size, {0});     // For vertical wrap-around
+        std::vector<CellCOMData> wrap_bottom_row(grid_size, {0});  // For vertical wrap-around
+
+
 
         if (rank > 0 && local_grid_size >= grid_size)
         {
@@ -726,13 +730,28 @@ public:
             MPI_Recv(ghost_top_row.data(), grid_size, mpi_cell_com_type, rank + 1, 0, MPI_COMM_WORLD, &status);
         }
 
-        if (rank > 0)
+        // Handle wrap-around ghost rows
+        if (rank == 0)
+        {
+            MPI_Send(top_row_data.data(), grid_size, mpi_cell_com_type, num_procs - 1, 2, MPI_COMM_WORLD);
+            MPI_Recv(wrap_bottom_row.data(), grid_size, mpi_cell_com_type, num_procs - 1, 3, MPI_COMM_WORLD, &status);
+            DEBUG_PRINT(rank, "Sent wrap-around row to rank %d", (rank == 0) ? num_procs-1 : 0);
+        }
+        if (rank == num_procs - 1)
+        {
+            MPI_Send(bottom_row_data.data(), grid_size, mpi_cell_com_type, 0, 3, MPI_COMM_WORLD);
+            MPI_Recv(wrap_top_row.data(), grid_size, mpi_cell_com_type, 0, 2, MPI_COMM_WORLD, &status);
+            DEBUG_PRINT(rank, "Sent wrap-around row to rank %d", (rank == 0) ? num_procs-1 : 0);
+        }
+
+
+        if (rank >= 0)
         {
             for (int x = 0; x < grid_size; x++)
             {
                 Cell ghost_cell;
                 ghost_cell.mx = ghost_bottom_row[x].mx;
-                ghost_cell.my = ghost_bottom_row[x].my - side_length; // Adjust for wrapping
+                ghost_cell.my = ghost_bottom_row[x].my; // Adjust for wrapping
                 ghost_cell.m = ghost_bottom_row[x].m;
                 ghost_cell.x = ghost_bottom_row[x].x;
                 ghost_cell.y = ghost_bottom_row[x].y;
@@ -743,13 +762,13 @@ public:
         }
 
         // For top ghost row (from next rank)
-        if (rank < num_procs - 1)
+        if (rank <= num_procs - 1)
         {
             for (int x = 0; x < grid_size; x++)
             {
                 Cell ghost_cell;
                 ghost_cell.mx = ghost_top_row[x].mx;
-                ghost_cell.my = ghost_top_row[x].my + side_length; // Adjust for wrapping
+                ghost_cell.my = ghost_top_row[x].my; // Adjust for wrapping
                 ghost_cell.m = ghost_top_row[x].m;
                 ghost_cell.x = ghost_top_row[x].x;
                 ghost_cell.y = ghost_top_row[x].y;
