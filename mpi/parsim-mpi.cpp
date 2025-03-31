@@ -789,16 +789,31 @@ public:
                     if (dx == 0 && dy == 0)
                         continue;
 
-                    int neighbor_x = (cell_x + dx + grid_size) % grid_size;
+                    int neighbor_x = cell_x + dx;
                     int neighbor_y = cell_y + dy;
 
-                    if (neighbor_x < 0 || neighbor_x >= grid_size)
-                        continue;
-
                     Cell temp_cell;
-                    temp_cell.mx = 0.0;
-                    temp_cell.my = 0.0;
+
+                    if (neighbor_x >= grid_size)
+                    {
+                        temp_cell.mx += side_length;
+                    }
+                    else if (neighbor_x < 0)
+                    {
+                        temp_cell.mx -= side_length;
+                    }
+                    if (neighbor_y >= grid_size)
+                    {
+                        temp_cell.my += side_length;
+                    }
+                    else if (neighbor_y < 0)
+                    {
+                        temp_cell.my -= side_length;
+                    }
                     temp_cell.m = 0.0;
+
+                    neighbor_x = (neighbor_x + grid_size) % grid_size;
+                    neighbor_y = (neighbor_y + grid_size) % grid_size;
 
                     bool found_cell = false;
 
@@ -811,8 +826,8 @@ public:
                             if (cells[g].x == neighbor_x &&
                                 (cells[g].y == neighbor_y || cells[g].y == neighbor_y + grid_size))
                             {
-                                temp_cell.mx = cells[g].mx;
-                                temp_cell.my = cells[g].my;
+                                temp_cell.mx += cells[g].mx;
+                                temp_cell.my += cells[g].my;
                                 temp_cell.m = cells[g].m;
                                 found_cell = true;
                                 break;
@@ -826,8 +841,8 @@ public:
                             int wrap_index = (wrap_y - my_row_start) * grid_size + neighbor_x;
                             if (wrap_index >= 0 && wrap_index < local_grid_size)
                             {
-                                temp_cell.mx = cells[wrap_index].mx;
-                                temp_cell.my = cells[wrap_index].my - side_length;
+                                temp_cell.mx += cells[wrap_index].mx;
+                                temp_cell.my += cells[wrap_index].my - side_length;
                                 temp_cell.m = cells[wrap_index].m;
                                 found_cell = true;
                             }
@@ -842,8 +857,8 @@ public:
                             if (cells[g].x == neighbor_x &&
                                 (cells[g].y == neighbor_y || cells[g].y == neighbor_y - grid_size))
                             {
-                                temp_cell.mx = cells[g].mx;
-                                temp_cell.my = cells[g].my;
+                                temp_cell.mx += cells[g].mx;
+                                temp_cell.my += cells[g].my;
                                 temp_cell.m = cells[g].m;
                                 found_cell = true;
                                 break;
@@ -857,8 +872,8 @@ public:
                             int wrap_index = (wrap_y - my_row_start) * grid_size + neighbor_x;
                             if (wrap_index >= 0 && wrap_index < local_grid_size)
                             {
-                                temp_cell.mx = cells[wrap_index].mx;
-                                temp_cell.my = cells[wrap_index].my + side_length;
+                                temp_cell.mx += cells[wrap_index].mx;
+                                temp_cell.my += cells[wrap_index].my + side_length;
                                 temp_cell.m = cells[wrap_index].m;
                                 found_cell = true;
                             }
@@ -870,8 +885,8 @@ public:
                         int neighbor_index = (neighbor_y - my_row_start) * grid_size + neighbor_x;
                         if (neighbor_index >= 0 && neighbor_index < local_grid_size)
                         {
-                            temp_cell.mx = cells[neighbor_index].mx;
-                            temp_cell.my = cells[neighbor_index].my;
+                            temp_cell.mx += cells[neighbor_index].mx;
+                            temp_cell.my += cells[neighbor_index].my;
                             temp_cell.m = cells[neighbor_index].m;
                             found_cell = true;
                         }
