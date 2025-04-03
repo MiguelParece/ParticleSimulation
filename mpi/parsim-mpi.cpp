@@ -669,6 +669,11 @@ public:
 
     void exchangeBoundaryCellInfo()
     {
+
+         MPI_Request send_request_top, recv_request_bottom;
+        MPI_Request send_request_bottom, recv_request_top;
+        MPI_Request wrap_send_req, wrap_recv_req;
+        
         int local_grid_size = (my_row_end - my_row_start) * grid_size;
         cells.resize(local_grid_size); // Remove any ghost cells
 
@@ -717,33 +722,63 @@ public:
         MPI_Status status;
 
         if (rank > 0)
+          // Exchange with previous and next ranks using non-blocking calls
+        if (rank > 0)
         {
-            MPI_Send(top_row_data.data(), grid_size, mpi_cell_com_type, rank - 1, 0, MPI_COMM_WORLD);
-
-            MPI_Recv(ghost_bottom_row.data(), grid_size, mpi_cell_com_type, rank - 1, 1, MPI_COMM_WORLD, &status);
+            // Post receive for bottom ghost row from rank-1 (tag 1)
+            MPI_Irecv(ghost_bottom_row.data(), grid_size, mpi_cell_com_type, rank - 1, 1,
+                    MPI_COMM_WORLD, &recv_request_bottom);
+            // Send top row to rank-1 (tag 0)
+            MPI_Isend(top_row_data.data(), grid_size, mpi_cell_com_type, rank - 1, 0,
+                    MPI_COMM_WORLD, &send_request_top);
         }
 
         if (rank < num_procs - 1)
         {
-            MPI_Send(bottom_row_data.data(), grid_size, mpi_cell_com_type, rank + 1, 1, MPI_COMM_WORLD);
-
-            MPI_Recv(ghost_top_row.data(), grid_size, mpi_cell_com_type, rank + 1, 0, MPI_COMM_WORLD, &status);
+            // Post receive for top ghost row from rank+1 (tag 0)
+            MPI_Irecv(ghost_top_row.data(), grid_size, mpi_cell_com_type, rank + 1, 0,
+                    MPI_COMM_WORLD, &recv_request_top);
+            // Send bottom row to rank+1 (tag 1)
+            MPI_Isend(bottom_row_data.data(), grid_size, mpi_cell_com_type, rank + 1, 1,
+                    MPI_COMM_WORLD, &send_request_bottom);
         }
 
-        // Handle wrap-around ghost rows
+        // Handle wrap-around for vertical boundaries
         if (rank == 0)
         {
-            MPI_Send(top_row_data.data(), grid_size, mpi_cell_com_type, num_procs - 1, 2, MPI_COMM_WORLD);
-            MPI_Recv(wrap_bottom_row.data(), grid_size, mpi_cell_com_type, num_procs - 1, 3, MPI_COMM_WORLD, &status);
-            DEBUG_PRINT(rank, "Sent wrap-around row to rank %d", (rank == 0) ? num_procs-1 : 0);
+            // Post receive for bottom ghost row from last rank (tag 3)
+            MPI_Irecv(wrap_bottom_row.data(), grid_size, mpi_cell_com_type, num_procs - 1, 3,
+                    MPI_COMM_WORLD, &wrap_recv_req);
+            // Send top row to last rank (tag 2)
+            MPI_Isend(top_row_data.data(), grid_size, mpi_cell_com_type, num_procs - 1, 2,
+                    MPI_COMM_WORLD, &wrap_send_req);
         }
-        if (rank == num_procs - 1)
+        else if (rank == num_procs - 1)
         {
-            MPI_Send(bottom_row_data.data(), grid_size, mpi_cell_com_type, 0, 3, MPI_COMM_WORLD);
-            MPI_Recv(wrap_top_row.data(), grid_size, mpi_cell_com_type, 0, 2, MPI_COMM_WORLD, &status);
-            DEBUG_PRINT(rank, "Sent wrap-around row to rank %d", (rank == 0) ? num_procs-1 : 0);
+            // Post receive for top ghost row from rank 0 (tag 2)
+            MPI_Irecv(wrap_top_row.data(), grid_size, mpi_cell_com_type, 0, 2,
+                    MPI_COMM_WORLD, &wrap_recv_req);
+            // Send bottom row to rank 0 (tag 3)
+            MPI_Isend(bottom_row_data.data(), grid_size, mpi_cell_com_type, 0, 3,
+                    MPI_COMM_WORLD, &wrap_send_req);
         }
 
+        // Wait for all non-blocking operations to complete
+        if (rank > 0)
+        {
+            MPI_Wait(&send_request_top, MPI_STATUS_IGNORE);
+            MPI_Wait(&recv_request_bottom, MPI_STATUS_IGNORE);
+        }
+        if (rank < num_procs - 1)
+        {
+            MPI_Wait(&send_request_bottom, MPI_STATUS_IGNORE);
+            MPI_Wait(&recv_request_top, MPI_STATUS_IGNORE);
+        }
+        if (rank == 0 || rank == num_procs - 1)
+        {
+            MPI_Wait(&wrap_send_req, MPI_STATUS_IGNORE);
+            MPI_Wait(&wrap_recv_req, MPI_STATUS_IGNORE);
+        }
 
         if (rank >= 0)
         {
